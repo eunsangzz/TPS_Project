@@ -7,7 +7,7 @@ public class ThirdPersonInput : MonoBehaviour
     public Vector2 Look { get; private set; }
     public bool JumpPressed { get; private set; }
     public bool SprintHeld { get; private set; }
-
+    public bool FreeLookHeld { get; private set; }
     public bool AimHeld { get; private set; } //ø°¿”
 
     private InputAction moveAction;
@@ -15,6 +15,7 @@ public class ThirdPersonInput : MonoBehaviour
     private InputAction jumpAction;
     private InputAction sprintAction;
     private InputAction aimAction;
+    private InputAction freeLookAction;
 
     private void Awake()
     {
@@ -24,23 +25,22 @@ public class ThirdPersonInput : MonoBehaviour
             .With("Down", "<Keyboard>/s")
             .With("Left", "<Keyboard>/a")
             .With("Right", "<Keyboard>/d");
-        moveAction.AddBinding("<Gamepad>/leftStick");
 
         lookAction = new InputAction("Look", InputActionType.Value);
         lookAction.AddBinding("<Mouse>/delta");
-        lookAction.AddBinding("<Gamepad>/rightStick");
 
         jumpAction = new InputAction("Jump", InputActionType.Button);
         jumpAction.AddBinding("<Keyboard>/space");
-        jumpAction.AddBinding("<Gamepad>/leftStickPress");
 
         sprintAction = new InputAction("Sprint", InputActionType.Button);
         sprintAction.AddBinding("<Keyboard>/leftShift");
-        sprintAction.AddBinding("<Gamepad>/leftStickPress");
 
         aimAction = new InputAction("Aim", InputActionType.Button);
         aimAction.AddBinding("<Mouse>/rightButton");
-        aimAction.AddBinding("<Gamepad>/leftTrigger");
+
+        freeLookAction = new InputAction("FreeLook", InputActionType.Button);
+        freeLookAction.AddBinding("<Keyboard>/leftAlt");
+        freeLookAction.AddBinding("<Keyboard>/rightAlt");
     }
 
     private void OnEnable()
@@ -50,6 +50,7 @@ public class ThirdPersonInput : MonoBehaviour
         jumpAction.Enable();
         sprintAction.Enable();
         aimAction.Enable();
+        freeLookAction.Enable();
     }
 
     private void OnDisable()
@@ -59,6 +60,7 @@ public class ThirdPersonInput : MonoBehaviour
         jumpAction.Disable();
         sprintAction.Disable();
         aimAction.Disable();
+        freeLookAction.Disable();
     }
 
     private void Update()
@@ -68,5 +70,6 @@ public class ThirdPersonInput : MonoBehaviour
         JumpPressed = jumpAction.WasPressedThisFrame();
         SprintHeld = sprintAction.IsPressed();
         AimHeld = aimAction.IsPressed();
+        FreeLookHeld = freeLookAction.IsPressed();
     }
 }

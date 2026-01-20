@@ -9,31 +9,32 @@ public class ThirdPersonCamera : MonoBehaviour
     [SerializeField] private float pitchMin = -35f;
     [SerializeField] private float pitchMax = 70f;
 
+    [Header("Follow")]
+    [SerializeField] private float followHeight = 2.1f;
+
     //카메라 이동시 충돌 방지
     [Header("Distance")]
     [SerializeField] private float defaultDistance = 3.0f;
     [SerializeField] private float minDistance = 0.5f;
     [SerializeField] private float collisionRadius = 0.25f; //반지름
     [SerializeField] private float distanceSmooth = 12f; //거리 보정시 연속성
-
+    [SerializeField] private LayerMask collisionMask;
 
     [Header("Target")]
     [SerializeField] private Transform target;
     [SerializeField] private ThirdPersonInput inputSource;
-    [SerializeField] private LayerMask collisionMask;
 
     [Header("Offset")]
     [SerializeField] private Vector3 normalOffset = new Vector3(0f, 0f, 0f);
     [SerializeField] private Vector3 aimOffset = new Vector3(0.45f, 0.1f, 0f);
     [SerializeField] private float offsetSmooth = 10f;
-    [SerializeField] private float followHeight = 2.1f;
 
     private float yaw;
     private float pitch;
+    public float Yaw => yaw;
+
     private float currentDistance;
     private Vector3 currentOffset;
-
-    public float Yaw => yaw;
 
     private Transform cam;
 
@@ -55,11 +56,9 @@ public class ThirdPersonCamera : MonoBehaviour
 
     private void Update()
     {
-        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-            LockCursor(false);
+        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) LockCursor(false);
 
-        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-            LockCursor(true);
+        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) LockCursor(true);
 
         HandleLook();
         FollowTarget();
@@ -92,6 +91,7 @@ public class ThirdPersonCamera : MonoBehaviour
             Time.deltaTime * offsetSmooth);
 
         Vector3 basePos = target.position + Vector3.up * followHeight;
+
         transform.position = basePos
             + transform.right * currentOffset.x
             + transform.up * currentOffset.y;

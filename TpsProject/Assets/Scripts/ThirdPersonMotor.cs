@@ -22,8 +22,11 @@ public class ThirdPersonMotor : MonoBehaviour
     private CharacterController controller;
 
     private Vector3 velocity;
-    private Vector3 currnetMove;
+    private Vector3 currentMove;
     private float currentSpeed;
+
+    private bool moveYawLocked;
+    private float lockedMoveYaw;
 
     private void Awake()
     {
@@ -44,28 +47,64 @@ public class ThirdPersonMotor : MonoBehaviour
         Vector2 raw = (input != null) ? input.Move : Vector2.zero;
         Vector2 moveInput = Vector2.ClampMagnitude(raw, 1f);
 
-        bool aim = (input != null) && input.AimHeld;
+        bool aim = input != null && input.AimHeld;
+        bool freeLook = input != null && input.FreeLookHeld;
+
         bool sprint = (input != null) && input.SprintHeld && !aim;
 
         float targetSpeed = sprint ? sprintSpeed : moveSpeed;
         float targetMagnitude = moveInput.magnitude * targetSpeed;
 
         currentSpeed = Mathf.MoveTowards(currentSpeed, targetMagnitude, acceleration * Time.deltaTime);
-        
-        Vector3 camForward = Vector3.forward;
-        Vector3 camRight = Vector3.right;
 
-        if (cameraRoot != null)
+        if (moveInput.sqrMagnitude < 0.0001f)
         {
-            camForward = cameraRoot.forward; camForward.y = 0f; camForward.Normalize();
-            camRight = cameraRoot.right; camRight.y = 0f; camRight.Normalize();
+            moveYawLocked = false;
+        }
+        else if (freeLook)
+        {
+            if (!moveYawLocked) 
+            {
+                moveYawLocked = true;
+                lockedMoveYaw = transform.eulerAngles.y;
+            }
+        }
+        else
+        {
+            moveYawLocked = false;
         }
 
-        Vector3 desiredMove = (camForward * moveInput.y + camRight * moveInput.x);
+        Vector3 basicForward;
+        Vector3 basicRight;
+
+        if(freeLook && moveYawLocked)
+        {
+            Quaternion basicRot = Quaternion.Euler(0f, lockedMoveYaw, 0f);
+            basicForward = basicRot * Vector3.forward;
+            basicRight = basicRot * Vector3.right;
+        }
+        else
+        {
+            basicForward = Vector3.forward;
+            basicRight = Vector3.right;
+
+            if (cameraRoot != null)
+            {
+                basicForward = cameraRoot.forward; basicForward.y = 0f; basicForward.Normalize();
+                basicRight = cameraRoot.right; basicRight.y = 0f; basicRight.Normalize();
+            }
+        }
+
+        Vector3 desiredMove = (basicForward * moveInput.y + basicRight * moveInput.x);
         if (desiredMove.sqrMagnitude > 0.0001f) desiredMove.Normalize();
         desiredMove *= currentSpeed;
 
-        currnetMove = desiredMove;
+        currentMove = desiredMove;
+
+        if(freeLook)
+        {
+            return;
+        }
 
         if (aim)
         {
@@ -86,22 +125,19 @@ public class ThirdPersonMotor : MonoBehaviour
     private void HandleJumpAndGravity()
     {
         bool grounded = controller.isGrounded;
-        if (grounded && velocity.y < 0f)
-        {
-            velocity.y = groundedStickForce;
-        }
 
-        if(grounded && input.JumpPressed)
-        {
-            velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
-        }
+        if (grounded && velocity.y < 0f) velocity.y = groundedStickForce;
+       
+
+        if(grounded && input.JumpPressed) velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
 
         velocity.y += gravity * Time.deltaTime;
     }
 
     private void ApplyMove()
     {
-        Vector3 move = currnetMove;
+        Vector3 move = currentMove;
+
         move.y = velocity.y;
 
         controller.Move(move * Time.deltaTime);
