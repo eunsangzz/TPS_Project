@@ -8,10 +8,13 @@ public class ThirdPersonInput : MonoBehaviour
     public bool JumpPressed { get; private set; }
     public bool SprintHeld { get; private set; }
 
+    public bool AimHeld { get; private set; } //ø°¿”
+
     private InputAction moveAction;
     private InputAction lookAction;
     private InputAction jumpAction;
     private InputAction sprintAction;
+    private InputAction aimAction;
 
     private void Awake()
     {
@@ -34,6 +37,10 @@ public class ThirdPersonInput : MonoBehaviour
         sprintAction = new InputAction("Sprint", InputActionType.Button);
         sprintAction.AddBinding("<Keyboard>/leftShift");
         sprintAction.AddBinding("<Gamepad>/leftStickPress");
+
+        aimAction = new InputAction("Aim", InputActionType.Button);
+        aimAction.AddBinding("<Mouse>/rightButton");
+        aimAction.AddBinding("<Gamepad>/leftTrigger");
     }
 
     private void OnEnable()
@@ -42,6 +49,7 @@ public class ThirdPersonInput : MonoBehaviour
         lookAction.Enable();
         jumpAction.Enable();
         sprintAction.Enable();
+        aimAction.Enable();
     }
 
     private void OnDisable()
@@ -50,6 +58,7 @@ public class ThirdPersonInput : MonoBehaviour
         lookAction.Disable();
         jumpAction.Disable();
         sprintAction.Disable();
+        aimAction.Disable();
     }
 
     private void Update()
@@ -58,5 +67,6 @@ public class ThirdPersonInput : MonoBehaviour
         Look = lookAction.ReadValue<Vector2>();
         JumpPressed = jumpAction.WasPressedThisFrame();
         SprintHeld = sprintAction.IsPressed();
+        AimHeld = aimAction.IsPressed();
     }
 }

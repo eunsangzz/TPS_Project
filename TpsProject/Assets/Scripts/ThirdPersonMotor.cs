@@ -17,6 +17,7 @@ public class ThirdPersonMotor : MonoBehaviour
     [Header("References")]
     [SerializeField] private Transform cameraRoot;
     [SerializeField] private ThirdPersonInput input;
+    [SerializeField] private ThirdPersonCamera cameraController;
 
     private CharacterController controller;
 
@@ -43,7 +44,9 @@ public class ThirdPersonMotor : MonoBehaviour
         Vector2 raw = (input != null) ? input.Move : Vector2.zero;
         Vector2 moveInput = Vector2.ClampMagnitude(raw, 1f);
 
-        bool sprint = (input != null) && input.SprintHeld;
+        bool aim = (input != null) && input.AimHeld;
+        bool sprint = (input != null) && input.SprintHeld && !aim;
+
         float targetSpeed = sprint ? sprintSpeed : moveSpeed;
         float targetMagnitude = moveInput.magnitude * targetSpeed;
 
@@ -60,14 +63,23 @@ public class ThirdPersonMotor : MonoBehaviour
 
         Vector3 desiredMove = (camForward * moveInput.y + camRight * moveInput.x);
         if (desiredMove.sqrMagnitude > 0.0001f) desiredMove.Normalize();
-        desiredMove = desiredMove.normalized * currentSpeed;
+        desiredMove *= currentSpeed;
 
         currnetMove = desiredMove;
 
-        if (desiredMove.sqrMagnitude > 0.001f) 
+        if (aim)
         {
-            Quaternion targetRot = Quaternion.LookRotation(desiredMove, Vector3.up);
+            float targetYaw = (cameraController != null) ? cameraController.Yaw : transform.eulerAngles.y;
+            Quaternion targetRot = Quaternion.Euler(0f, targetYaw, 0f);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotationSpeed * Time.deltaTime);
+        }
+        else
+        {
+            if (desiredMove.sqrMagnitude > 0.001f)
+            {
+                Quaternion targetRot = Quaternion.LookRotation(desiredMove, Vector3.up);
+                transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotationSpeed * Time.deltaTime);
+            }
         }
     }
 

@@ -3,17 +3,46 @@ using UnityEngine.InputSystem;
 
 public class ThirdPersonCamera : MonoBehaviour
 {
+    //카메라 시점
     [Header("Look")]
-    [SerializeField] private float mouseSensitivity = 2.2f;
+    [SerializeField] private float mouseSensitivity = 0.05f;
     [SerializeField] private float pitchMin = -35f;
     [SerializeField] private float pitchMax = 70f;
+
+    //카메라 이동시 충돌 방지
+    [Header("Distance")]
+    [SerializeField] private float defaultDistance = 3.0f;
+    [SerializeField] private float minDistance = 0.5f;
+    [SerializeField] private float collisionRadius = 0.25f; //반지름
+    [SerializeField] private float distanceSmooth = 12f; //거리 보정시 연속성
+
 
     [Header("Target")]
     [SerializeField] private Transform target;
     [SerializeField] private ThirdPersonInput inputSource;
+    [SerializeField] private LayerMask collisionMask;
+
+    [Header("Offset")]
+    [SerializeField] private Vector3 normalOffset = new Vector3(0f, 0f, 0f);
+    [SerializeField] private Vector3 aimOffset = new Vector3(0.45f, 0.1f, 0f);
+    [SerializeField] private float offsetSmooth = 10f;
+    [SerializeField] private float followHeight = 2.1f;
 
     private float yaw;
     private float pitch;
+    private float currentDistance;
+    private Vector3 currentOffset;
+
+    public float Yaw => yaw;
+
+    private Transform cam;
+
+    private void Awake()
+    {
+        cam = GetComponentInChildren<Camera>().transform;
+        currentDistance = defaultDistance;
+        currentOffset = normalOffset;
+    }
 
     private void Start()
     {
@@ -34,6 +63,7 @@ public class ThirdPersonCamera : MonoBehaviour
 
         HandleLook();
         FollowTarget();
+        HandleCollision();
     }
 
     private void HandleLook()
@@ -53,7 +83,45 @@ public class ThirdPersonCamera : MonoBehaviour
     {
         if (target == null) return;
 
-        transform.position = target.position + Vector3.up * 1.6f;
+        bool aim = inputSource != null && inputSource.AimHeld;
+
+        Vector3 targetOffset = aim ? aimOffset : normalOffset;
+        currentOffset = Vector3.Lerp(
+            currentOffset,
+            targetOffset,
+            Time.deltaTime * offsetSmooth);
+
+        Vector3 basePos = target.position + Vector3.up * followHeight;
+        transform.position = basePos
+            + transform.right * currentOffset.x
+            + transform.up * currentOffset.y;
+    }
+
+    private void HandleCollision()
+    {
+        Vector3 origin = transform.position;
+        Vector3 direction = -transform.forward;
+
+        float targetDistance = defaultDistance;
+
+        if(Physics.SphereCast(
+            origin,
+            collisionRadius,
+            direction,
+            out RaycastHit hit,
+            defaultDistance,
+            collisionMask,
+            QueryTriggerInteraction.Ignore))
+        {
+            targetDistance = Mathf.Max(hit.distance - 0.05f, minDistance);
+        }
+
+        currentDistance = Mathf.Lerp(
+            currentDistance,
+            targetDistance,
+            Time.deltaTime * distanceSmooth);
+
+        cam.localPosition = new Vector3(0f, 0f, -currentDistance);
     }
 
     private void LockCursor(bool locked)
