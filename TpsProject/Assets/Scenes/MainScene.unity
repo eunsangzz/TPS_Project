@@ -592,15 +592,19 @@ MonoBehaviour:
   mouseSensitivity: 0.05
   pitchMin: -35
   pitchMax: 70
+  followHeight: 2.1
   defaultDistance: 3
   minDistance: 0.5
   collisionRadius: 0.25
   distanceSmooth: 12
-  target: {fileID: 1564931712}
-  inputSource: {fileID: 1564931709}
   collisionMask:
     serializedVersion: 2
     m_Bits: 64
+  target: {fileID: 1564931712}
+  inputSource: {fileID: 1564931709}
+  normalOffset: {x: 0, y: 0, z: 0}
+  aimOffset: {x: 0.45, y: 0.1, z: 0}
+  offsetSmooth: 10
 --- !u!1001 &1446234076
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -697,6 +701,7 @@ MonoBehaviour:
   cameraRoot: {fileID: 1305875043}
   input: {fileID: 1564931709}
   cameraController: {fileID: 1305875044}
+  animator: {fileID: 0}
 --- !u!114 &1564931709
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -18,6 +18,7 @@ public class ThirdPersonMotor : MonoBehaviour
     [SerializeField] private Transform cameraRoot;
     [SerializeField] private ThirdPersonInput input;
     [SerializeField] private ThirdPersonCamera cameraController;
+    [SerializeField] private Animator animator;
 
     private CharacterController controller;
 
@@ -32,7 +33,7 @@ public class ThirdPersonMotor : MonoBehaviour
     {
         controller = GetComponent<CharacterController>();
         if (input == null) input = GetComponent<ThirdPersonInput>();
-            
+        if (animator == null) animator = GetComponentInChildren<Animator>();
     }
 
     private void Update()
@@ -40,6 +41,7 @@ public class ThirdPersonMotor : MonoBehaviour
         HandleMovement();
         HandleJumpAndGravity();
         ApplyMove();
+        UpdataAnimator();
     }
 
     private void HandleMovement()
@@ -141,5 +143,17 @@ public class ThirdPersonMotor : MonoBehaviour
         move.y = velocity.y;
 
         controller.Move(move * Time.deltaTime);
+    }
+
+    private void UpdataAnimator()
+    {
+        if (animator == null) return;
+
+        float speedPercent = Mathf.InverseLerp(0f, sprintSpeed, currentSpeed);
+
+        animator.SetFloat("MoveSpeed", speedPercent, 0.1f, Time.deltaTime);
+        animator.SetBool("IsSprint", input != null && input.SprintHeld);
+        animator.SetBool("IsAim", input != null && input.AimHeld);
+        animator.SetBool("IsGrounded", controller.isGrounded);
     }
 }
