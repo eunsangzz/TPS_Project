@@ -458,6 +458,7 @@
 "Assets/Scripts/ThirdPersonCamera.cs"
 "Assets/Scripts/ThirdPersonInput.cs"
 "Assets/Scripts/ThirdPersonMotor.cs"
+"Assets/Scripts/ThirdPersonShooter.cs"
 "Assets/TutorialInfo/Scripts/Readme.cs"
 -langversion:9.0
 /deterministic

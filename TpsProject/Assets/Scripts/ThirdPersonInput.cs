@@ -9,6 +9,8 @@ public class ThirdPersonInput : MonoBehaviour
     public bool SprintHeld { get; private set; }
     public bool FreeLookHeld { get; private set; }
     public bool AimHeld { get; private set; } //ø°¿”
+    public bool FireHeld { get; private set; }
+    public bool FirePressed { get; private set; }
 
     private InputAction moveAction;
     private InputAction lookAction;
@@ -16,6 +18,7 @@ public class ThirdPersonInput : MonoBehaviour
     private InputAction sprintAction;
     private InputAction aimAction;
     private InputAction freeLookAction;
+    private InputAction fireAction;
 
     private void Awake()
     {
@@ -41,6 +44,9 @@ public class ThirdPersonInput : MonoBehaviour
         freeLookAction = new InputAction("FreeLook", InputActionType.Button);
         freeLookAction.AddBinding("<Keyboard>/leftAlt");
         freeLookAction.AddBinding("<Keyboard>/rightAlt");
+
+        fireAction = new InputAction("Fire", InputActionType.Button);
+        fireAction.AddBinding("<Mouse>/leftButton");
     }
 
     private void OnEnable()
@@ -51,6 +57,7 @@ public class ThirdPersonInput : MonoBehaviour
         sprintAction.Enable();
         aimAction.Enable();
         freeLookAction.Enable();
+        fireAction.Enable();
     }
 
     private void OnDisable()
@@ -61,6 +68,7 @@ public class ThirdPersonInput : MonoBehaviour
         sprintAction.Disable();
         aimAction.Disable();
         freeLookAction.Disable();
+        fireAction.Disable();
     }
 
     private void Update()
@@ -71,5 +79,7 @@ public class ThirdPersonInput : MonoBehaviour
         SprintHeld = sprintAction.IsPressed();
         AimHeld = aimAction.IsPressed();
         FreeLookHeld = freeLookAction.IsPressed();
+        FireHeld = fireAction.IsPressed();
+        FirePressed = fireAction.WasPressedThisFrame();
     }
 }
