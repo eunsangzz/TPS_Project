@@ -49,7 +49,7 @@ public class ThirdPersonMotor : MonoBehaviour
         Vector2 raw = (input != null) ? input.Move : Vector2.zero;
         Vector2 moveInput = Vector2.ClampMagnitude(raw, 1f);
 
-        bool aim = input != null && input.AimHeld;
+        bool aim = input != null && cameraController.IsAiming;
         bool freeLook = input != null && input.FreeLookHeld;
 
         bool sprint = (input != null) && input.SprintHeld && !aim;
@@ -153,7 +153,7 @@ public class ThirdPersonMotor : MonoBehaviour
 
         animator.SetFloat("MoveSpeed", speedPercent, 0.1f, Time.deltaTime);
         animator.SetBool("IsSprint", input != null && input.SprintHeld);
-        animator.SetBool("IsAim", input != null && input.AimHeld);
+        animator.SetBool("IsAim", cameraController != null && cameraController.IsAiming);
         animator.SetBool("IsGrounded", controller.isGrounded);
     }
 }

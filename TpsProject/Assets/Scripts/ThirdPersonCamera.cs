@@ -29,21 +29,22 @@ public class ThirdPersonCamera : MonoBehaviour
     [SerializeField] private Vector3 aimOffset = new Vector3(0.45f, 0.1f, 0f);
     [SerializeField] private float offsetSmooth = 10f;
 
-    [Header("Zoom")]
-    [SerializeField] private bool enableScopeZoom = true;
-    [SerializeField] private float doubleClickTime = 0.25f;
-    [SerializeField] private float zoomMutiplier = 4.0f; //배율
-    [SerializeField] private float zoomSmooth = 12f;
+    private enum AimState { Hip, Shoulder, Scope }
 
-    [Header("Tuning")]
+    [Header("Aim/Scope")]
+    [SerializeField] private float scopeDoubleClickWindow = 0.25f; // 우클릭 더블클릭 판정 시간
+    [SerializeField] private float zoomMultiplier = 4f;            // 4배 줌
+    [SerializeField] private float zoomSmooth = 12f;               // 줌 전환 속도
+
+    [Header("Scope Tuning")]
     [SerializeField, Range(0.05f, 1f)] private float scopedSensitivityMultiplier = 0.35f;
-
     [SerializeField] private Vector3 scopeOffset = new Vector3(0f, 0.05f, 0f);
 
-    private float lastRightClickTime = -999f;
-    private bool isScoped;
-    private bool scopeHoldActive;
-    public bool IsScoped => isScoped;
+    private AimState aimState = AimState.Hip;
+    private float lastRmbPressTime = -999f;
+
+    public bool IsAiming => aimState != AimState.Hip;
+    public bool IsScoped => aimState == AimState.Scope;
 
     private float yaw;
     private float pitch;
@@ -55,21 +56,22 @@ public class ThirdPersonCamera : MonoBehaviour
     private Transform cam;
     private Camera camComponent;
 
-    private float defaltFov;
+    private float defaultFov;
     private float targetFov;
 
     private void Awake()
     {
-        cam = GetComponentInChildren<Camera>().transform;
-        camComponent = GetComponent<Camera>();
+        var childCam = GetComponentInChildren<Camera>();
+        camComponent = childCam;
+        cam = childCam != null ? childCam.transform : null;
 
         currentDistance = defaultDistance;
         currentOffset = normalOffset;
 
-        if (camComponent != null) 
+        if (camComponent != null)
         {
-            defaltFov = camComponent.fieldOfView;
-            targetFov = defaltFov;
+            defaultFov = camComponent.fieldOfView;
+            targetFov = defaultFov;
         }
     }
 
@@ -84,61 +86,68 @@ public class ThirdPersonCamera : MonoBehaviour
 
     private void Update()
     {
-        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) LockCursor(false);
+        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+            LockCursor(false);
 
-        if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame) LockCursor(true);
+        // 우클릭하면 커서 잠금(게임 조작용)
+        if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
+            LockCursor(true);
 
-        HandelScopeZoom_DoubleClick();
-        UpdateScopeHoldRelease();
+        UpdateAimScopeState(); 
         UpdateCameraFov();
 
         HandleLook();
         FollowTarget();
         HandleCollision();
     }
-
-    private void HandelScopeZoom_DoubleClick()
+    private void UpdateAimScopeState()
     {
-        if (!enableScopeZoom) return;
         if (Mouse.current == null) return;
 
-        if (!Mouse.current.rightButton.wasPressedThisFrame) return;
+        bool rmbHeld = Mouse.current.rightButton.isPressed;
 
-        float now = Time.deltaTime;
-
-        if (now - lastRightClickTime <= doubleClickTime) 
+        
+        if (!rmbHeld)
         {
-            scopeHoldActive = true;
-            SetScope(true);
-
-            lastRightClickTime = -999f; // 3번클릭방지
+            if (aimState != AimState.Hip)
+            {
+                aimState = AimState.Hip;
+                SetFovScoped(false);
+            }
+            return;
         }
-        else
+
+        if (aimState != AimState.Scope)
         {
-            lastRightClickTime = now;
+            aimState = AimState.Shoulder;
+            SetFovScoped(false);
+        }
+
+        if (Mouse.current.rightButton.wasPressedThisFrame)
+        {
+            float now = Time.time;
+
+            if (now - lastRmbPressTime <= scopeDoubleClickWindow)
+            {
+                aimState = AimState.Scope;
+                SetFovScoped(true);
+
+                // 3연타 방지
+                lastRmbPressTime = -999f;
+            }
+            else
+            {
+                lastRmbPressTime = now;
+            }
         }
     }
 
-    private void UpdateScopeHoldRelease()
+    private void SetFovScoped(bool scoped)
     {
-        if (!scopeHoldActive) return;
-        if (Mouse.current == null) return;
-
-        if(!Mouse.current.rightButton.isPressed)
-        {
-            scopeHoldActive = false;
-            SetScope(false);
-        }
-    }
-
-    private void SetScope(bool on)
-    {
-        isScoped = !isScoped;
-
         if (camComponent == null) return;
 
-        float scpedFov = defaltFov / Mathf.Max(zoomMutiplier, 1f);
-        targetFov = isScoped ? scpedFov : defaltFov;
+        float scopedFov = defaultFov / Mathf.Max(zoomMultiplier, 1f);
+        targetFov = scoped ? scopedFov : defaultFov;
     }
 
     private void UpdateCameraFov()
@@ -149,7 +158,7 @@ public class ThirdPersonCamera : MonoBehaviour
             camComponent.fieldOfView,
             targetFov,
             Time.deltaTime * zoomSmooth
-            );
+        );
     }
 
     private void HandleLook()
@@ -158,10 +167,10 @@ public class ThirdPersonCamera : MonoBehaviour
 
         Vector2 look = (inputSource != null) ? inputSource.Look : Vector2.zero;
 
-        float sen = mouseSensitivity * (isScoped ? scopedSensitivityMultiplier : 1f);
+        float sens = mouseSensitivity * (IsScoped ? scopedSensitivityMultiplier : 1f);
 
-        yaw += look.x * mouseSensitivity;
-        pitch -= look.y * mouseSensitivity;
+        yaw += look.x * sens;
+        pitch -= look.y * sens;
         pitch = Mathf.Clamp(pitch, pitchMin, pitchMax);
 
         transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
@@ -171,16 +180,15 @@ public class ThirdPersonCamera : MonoBehaviour
     {
         if (target == null) return;
 
-        bool aim = inputSource != null && inputSource.AimHeld;
-
-        Vector3 targetOffset = isScoped ? scopeOffset :
-            (aim ? aimOffset : normalOffset);
-
+        Vector3 targetOffset =
+            IsScoped ? scopeOffset :
+            (IsAiming ? aimOffset : normalOffset);
 
         currentOffset = Vector3.Lerp(
             currentOffset,
             targetOffset,
-            Time.deltaTime * offsetSmooth);
+            Time.deltaTime * offsetSmooth
+        );
 
         Vector3 basePos = target.position + Vector3.up * followHeight;
 
@@ -191,12 +199,14 @@ public class ThirdPersonCamera : MonoBehaviour
 
     private void HandleCollision()
     {
+        if (cam == null) return;
+
         Vector3 origin = transform.position;
         Vector3 direction = -transform.forward;
 
         float targetDistance = defaultDistance;
 
-        if(Physics.SphereCast(
+        if (Physics.SphereCast(
             origin,
             collisionRadius,
             direction,
@@ -211,7 +221,8 @@ public class ThirdPersonCamera : MonoBehaviour
         currentDistance = Mathf.Lerp(
             currentDistance,
             targetDistance,
-            Time.deltaTime * distanceSmooth);
+            Time.deltaTime * distanceSmooth
+        );
 
         cam.localPosition = new Vector3(0f, 0f, -currentDistance);
     }
@@ -221,5 +232,4 @@ public class ThirdPersonCamera : MonoBehaviour
         Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
         Cursor.visible = !locked;
     }
-
 }

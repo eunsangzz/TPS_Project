@@ -38,7 +38,9 @@ public class ThirdPersonShooter : MonoBehaviour
     {
         if (input == null || shooterCamera == null) return;
 
-        bool canShootByAim = !requireAimToShoot || input.AimHeld;
+        ThirdPersonCamera camCtrl = shooterCamera != null ? shooterCamera.GetComponentInParent<ThirdPersonCamera>() : null;
+        bool isAiming = (camCtrl != null && camCtrl.IsAiming);
+        bool canShootByAim = !requireAimToShoot || isAiming;
 
         if (canShootByAim && input.FireHeld) TryShoot();
     }
