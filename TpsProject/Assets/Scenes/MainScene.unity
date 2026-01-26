@@ -671,6 +671,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1305875043}
   - component: {fileID: 1305875044}
+  - component: {fileID: 1305875045}
   m_Layer: 0
   m_Name: PlayerCameraRoot
   m_TagString: Untagged
@@ -722,6 +723,32 @@ MonoBehaviour:
   normalOffset: {x: 0, y: 0, z: 0}
   aimOffset: {x: 0.45, y: 0.1, z: 0}
   offsetSmooth: 10
+  enableScopeZoom: 1
+  doubleClickTime: 0.25
+  zoomMutiplier: 4
+  zoomSmooth: 12
+  scopedSensitivityMultiplier: 0.35
+  scopeOffset: {x: 0, y: 0.05, z: 0}
+--- !u!114 &1305875045
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1305875042}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41f4586500411674991f7e48d0a6d8ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ScopeOverlay
+  thirdPersonCamera: {fileID: 0}
+  textureSize: 1024
+  outsideAlpha: 0.9
+  circleRadius: 0.38
+  ringThickness: 3
+  crosshairThickness: 2
+  crosshairAlpha: 0.85
+  fadeSpeed: 18
 --- !u!1001 &1446234076
 PrefabInstance:
   m_ObjectHideFlags: 0
