@@ -36,9 +36,20 @@ public class ThirdPersonCamera : MonoBehaviour
     [SerializeField] private float zoomMultiplier = 4f;            // 4πË ¡‹
     [SerializeField] private float zoomSmooth = 12f;               // ¡‹ ¿¸»Ø º”µµ
 
-    [Header("Scope Tuning")]
+    [Header("Aim Sens")]
     [SerializeField, Range(0.05f, 1f)] private float scopedSensitivityMultiplier = 0.35f;
+    [SerializeField, Range(0.05f, 1f)] private float shoulderSensitivityMultiplier = 0.7f;
+
     [SerializeField] private Vector3 scopeOffset = new Vector3(0f, 0.05f, 0f);
+
+    [Header("Recoil")]
+    [SerializeField] private float recoilReturn = 18f;
+    [SerializeField] private float recoilSnappiness = 35f;
+
+    [SerializeField] private Vector2 hipRecoil = new Vector2(2.0f, 0.6f);
+    [SerializeField] private Vector2 shoulderRecoil = new Vector2(1.2f, 0.4f);
+    [SerializeField] private Vector2 scopeRecoil = new Vector2(0.5f, 0.2f);
+
 
     private AimState aimState = AimState.Hip;
     private float lastRmbPressTime = -999f;
@@ -58,6 +69,12 @@ public class ThirdPersonCamera : MonoBehaviour
 
     private float defaultFov;
     private float targetFov;
+
+    private float recoilPitch;
+    private float recoilYaw;
+
+    private float recoilPitchVel;
+    private float recoilYawVel;
 
     private void Awake()
     {
@@ -97,6 +114,7 @@ public class ThirdPersonCamera : MonoBehaviour
         UpdateCameraFov();
 
         HandleLook();
+        ApplyRecoil();
         FollowTarget();
         HandleCollision();
     }
@@ -167,7 +185,11 @@ public class ThirdPersonCamera : MonoBehaviour
 
         Vector2 look = (inputSource != null) ? inputSource.Look : Vector2.zero;
 
-        float sens = mouseSensitivity * (IsScoped ? scopedSensitivityMultiplier : 1f);
+        float multiplier = 
+            IsScoped ? scopedSensitivityMultiplier :
+            (IsAiming ? shoulderSensitivityMultiplier : 1f);
+
+        float sens = mouseSensitivity * multiplier;
 
         yaw += look.x * sens;
         pitch -= look.y * sens;
@@ -231,5 +253,30 @@ public class ThirdPersonCamera : MonoBehaviour
     {
         Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
         Cursor.visible = !locked;
+    }
+
+    public void AddRecoil()
+    {
+        Vector2 rec =
+            IsScoped ? scopeRecoil :
+            (IsAiming ? shoulderRecoil : hipRecoil);
+
+        recoilPitch += rec.x;
+        recoilYaw += Random.Range(-rec.y, rec.y);
+    }
+
+    private void ApplyRecoil()
+    {
+        float targetPitch = recoilPitch;
+        float targetYaw = recoilYaw;
+
+        recoilPitch = Mathf.SmoothDamp(recoilPitch, 0f, ref recoilPitchVel, 1f / recoilReturn);
+        recoilYaw = Mathf.SmoothDamp(recoilYaw, 0f, ref recoilYawVel, 1f / recoilReturn);
+
+        pitch -= targetPitch * Time.deltaTime * recoilSnappiness;
+        yaw += targetYaw * Time.deltaTime * recoilSnappiness;
+
+        pitch = Mathf.Clamp(pitch, pitchMin, pitchMax);
+        transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
     }
 }

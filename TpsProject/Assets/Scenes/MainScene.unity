@@ -723,12 +723,17 @@ MonoBehaviour:
   normalOffset: {x: 0, y: 0, z: 0}
   aimOffset: {x: 0.45, y: 0.1, z: 0}
   offsetSmooth: 10
-  enableScopeZoom: 1
-  doubleClickTime: 0.25
-  zoomMutiplier: 4
+  scopeDoubleClickWindow: 0.25
+  zoomMultiplier: 4
   zoomSmooth: 12
   scopedSensitivityMultiplier: 0.35
+  shoulderSensitivityMultiplier: 0.7
   scopeOffset: {x: 0, y: 0.05, z: 0}
+  recoilReturn: 18
+  recoilSnappiness: 35
+  hipRecoil: {x: 2, y: 0.6}
+  shoulderRecoil: {x: 1.2, y: 0.4}
+  scopeRecoil: {x: 0.5, y: 0.2}
 --- !u!114 &1305875045
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -972,12 +977,19 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   requireAimToShoot: 0
+  hipSpread: 2.5
+  shoulderSpread: 1.2
+  scopeSpread: 0.25
   damage: 20
   muzzleFlash: {fileID: 0}
   hitEffectPrefab: {fileID: 0}
   hitEffectLife: 1.5
   tracer: {fileID: 0}
   tracerLife: 0.05
+  bulletHoleProfab: {fileID: 8208503643491127758, guid: 2d454192079959e448de0caddcb7f25d, type: 3}
+  bulletHoleLife: 20
+  bullstHoleOffset: 0.002
+  parentToHitObject: 1
 --- !u!95 &1564931714 stripped
 Animator:
   m_CorrespondingSourceObject: {fileID: 7673487250857332701, guid: c98043d57e0190845b790d7b92990bee, type: 3}
