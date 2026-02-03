@@ -884,6 +884,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7673487251499248760, guid: c98043d57e0190845b790d7b92990bee, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1564931713}
+    - targetCorrespondingSourceObject: {fileID: 7673487251499248760, guid: c98043d57e0190845b790d7b92990bee, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1564931715}
   m_SourcePrefab: {fileID: 100100000, guid: c98043d57e0190845b790d7b92990bee, type: 3}
 --- !u!1 &1564931707 stripped
 GameObject:
@@ -977,6 +980,16 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   requireAimToShoot: 0
+  fireMode: 1
+  magazineSize: 30
+  reserveAmmo: 90
+  reloadTime: 2
+  autoReloadWhenEmpty: 1
+  fireSingleTrigger: FireSingle
+  fireAutoTrigger: FireAuto
+  reloadTrigger: Reload
+  fireModeIntParam: 
+  isReloadingBoolParam: 
   hipSpread: 2.5
   shoulderSpread: 1.2
   scopeSpread: 0.25
@@ -990,11 +1003,30 @@ MonoBehaviour:
   bulletHoleLife: 20
   bullstHoleOffset: 0.002
   parentToHitObject: 1
+  playerHealth: {fileID: 0}
 --- !u!95 &1564931714 stripped
 Animator:
   m_CorrespondingSourceObject: {fileID: 7673487250857332701, guid: c98043d57e0190845b790d7b92990bee, type: 3}
   m_PrefabInstance: {fileID: 1446234076}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &1564931715
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1564931707}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8df9607661ba7ee478bd61f6cc98fe66, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
+  maxHealth: 100
+  destroyOnDeath: 0
+  animator: {fileID: 0}
+  hitTrigger: Hit
+  dieTrigger: Die
+  isDeadBool: IsDead
 --- !u!1 &2021621791
 GameObject:
   m_ObjectHideFlags: 0

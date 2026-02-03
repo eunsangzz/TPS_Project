@@ -1,7 +1,10 @@
+using System.Collections;
 using UnityEngine;
 
 public class ThirdPersonShooter : MonoBehaviour
 {
+    public enum FireMode { Single, Auto }
+
     [Header("Reference")]
     [SerializeField] private ThirdPersonInput input;
     [SerializeField] private Camera shooterCamera;
@@ -13,6 +16,23 @@ public class ThirdPersonShooter : MonoBehaviour
     [SerializeField] private float range = 200f;
     [SerializeField] private LayerMask hitMask = ~0;
     [SerializeField] private bool requireAimToShoot = false;
+
+    [Header("FireMode")]
+    [SerializeField] private FireMode fireMode = FireMode.Auto;
+
+    [Header("Ammo")]
+    [SerializeField] private int magazineSize = 30;
+    [SerializeField] private int reserveAmmo = 90;
+    [SerializeField] private float reloadTime = 2f;
+    [SerializeField] private bool autoReloadWhenEmpty = true;
+
+    [Header("Animator")]
+    [SerializeField] private string fireSingleTrigger = "FireSingle";
+    [SerializeField] private string fireAutoTrigger = "FireAuto";
+    [SerializeField] private string reloadTrigger = "Reload";
+    [Tooltip("옵션: Animator에 int/bool 파라미터가 있으면 연결. 없으면 비워도 됨.")]
+    [SerializeField] private string fireModeIntParam = ""; 
+    [SerializeField] private string isReloadingBoolParam = ""; 
 
     [Header("Spread")]
     [SerializeField] private float hipSpread = 2.5f;
@@ -35,7 +55,17 @@ public class ThirdPersonShooter : MonoBehaviour
     [SerializeField] private float bullstHoleOffset = 0.002f;
     [SerializeField] private bool parentToHitObject = true;
 
+    [Header("PlayerStat")]
+    [SerializeField] private PlayerHealth playerHealth;
+
     private float nextFireTime;
+    private int ammoInMag;
+    private bool isReloading;
+
+    public int AmmoInMag => ammoInMag;
+    public int ReserveAmmo => reserveAmmo;
+    public bool IsReloading => isReloading;
+    public FireMode CurrentFireMode => fireMode;
 
     private void Awake()
     {
@@ -43,17 +73,63 @@ public class ThirdPersonShooter : MonoBehaviour
         if (animator == null) animator = GetComponentInChildren<Animator>();
 
         if (shooterCamera == null) if (Camera.main != null) shooterCamera = Camera.main;
+
+        ammoInMag = Mathf.Clamp(magazineSize, 1, 9999);
+        if (playerHealth == null) playerHealth = GetComponent<PlayerHealth>();
+
+        PushAnimatorState();
     }
 
     private void Update()
     {
         if (input == null || shooterCamera == null) return;
+        if (playerHealth != null && playerHealth.IsDead) return;
+
+        if (input.ToggleFireModePressed) ToggleFireMode();
+
+        if (input.ReloadPressed) TryStartReload();
+
+        if (isReloading) return;
+
 
         ThirdPersonCamera camCtrl = shooterCamera != null ? shooterCamera.GetComponentInParent<ThirdPersonCamera>() : null;
         bool isAiming = (camCtrl != null && camCtrl.IsAiming);
         bool canShootByAim = !requireAimToShoot || isAiming;
 
-        if (canShootByAim && input.FireHeld) TryShoot();
+        if (!canShootByAim) return;
+
+        bool wasShoot =
+            (fireMode == FireMode.Auto) ? input.FireHeld :
+            (fireMode == FireMode.Single) ? input.FirePressed :
+            false;
+
+        if(wasShoot)
+        {
+            if(ammoInMag <= 0)
+            {
+                if (autoReloadWhenEmpty) TryStartReload();
+                return;
+            }
+
+            TryShoot();
+        }
+    }
+
+    private void ToggleFireMode()
+    {
+        fireMode = (fireMode == FireMode.Auto) ? FireMode.Single : FireMode.Auto;
+        PushAnimatorState();
+    }
+
+    private void PushAnimatorState()
+    {
+        if (animator == null) return;
+
+        if (!string.IsNullOrEmpty(fireModeIntParam))
+            animator.SetInteger(fireModeIntParam, fireMode == FireMode.Single ? 0 : 1);
+
+        if (!string.IsNullOrEmpty(isReloadingBoolParam))
+            animator.SetBool(isReloadingBoolParam, isReloading);
     }
 
     private void TryShoot()
@@ -66,6 +142,8 @@ public class ThirdPersonShooter : MonoBehaviour
 
     private void ShootOnce()
     {
+        ammoInMag = Mathf.Max(0, ammoInMag - 1);
+
         ThirdPersonCamera camCtr1 =
             shooterCamera != null ? shooterCamera.GetComponentInParent<ThirdPersonCamera>() : null;
 
@@ -124,10 +202,46 @@ public class ThirdPersonShooter : MonoBehaviour
             Invoke(nameof(HideTracer), tracerLife);
         }
 
-        if (animator != null) animator.SetTrigger("Fire");
+        if (animator != null)
+        {
+            string trig = (fireMode == FireMode.Single) ? fireSingleTrigger : fireAutoTrigger;
+            if (!string.IsNullOrEmpty(trig))
+                animator.SetTrigger(trig);
+        }
 
         if (camCtr1 != null) camCtr1.AddRecoil();
 
+        if (ammoInMag <= 0 && autoReloadWhenEmpty) TryStartReload();
+
+    }
+
+    private void TryStartReload()
+    {
+        if (isReloading) return;
+        if (ammoInMag >= magazineSize) return;
+        if (reserveAmmo <= 0) return;
+
+        StartCoroutine(ReloadRoutine());
+    }
+
+    private IEnumerator ReloadRoutine()
+    {
+        isReloading = true;
+        PushAnimatorState();
+
+        if (animator != null && !string.IsNullOrEmpty(reloadTrigger))
+            animator.SetTrigger(reloadTrigger);
+
+        yield return new WaitForSeconds(reloadTime);
+
+        int need = magazineSize - ammoInMag;
+        int take = Mathf.Min(need, reserveAmmo);
+
+        ammoInMag += take;
+        reserveAmmo -= take;
+
+        isReloading = false;
+        PushAnimatorState();
     }
 
     private void HideTracer()

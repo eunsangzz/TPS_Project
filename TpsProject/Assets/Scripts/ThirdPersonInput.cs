@@ -11,6 +11,8 @@ public class ThirdPersonInput : MonoBehaviour
     public bool AimHeld { get; private set; } //ø°¿”
     public bool FireHeld { get; private set; }
     public bool FirePressed { get; private set; }
+    public bool ReloadPressed { get; private set; }
+    public bool ToggleFireModePressed { get; private set; }
 
     private InputAction moveAction;
     private InputAction lookAction;
@@ -19,6 +21,8 @@ public class ThirdPersonInput : MonoBehaviour
     private InputAction aimAction;
     private InputAction freeLookAction;
     private InputAction fireAction;
+    private InputAction reloadAction;
+    private InputAction toggleFireModeAction;
 
     private void Awake()
     {
@@ -47,6 +51,12 @@ public class ThirdPersonInput : MonoBehaviour
 
         fireAction = new InputAction("Fire", InputActionType.Button);
         fireAction.AddBinding("<Mouse>/leftButton");
+
+        reloadAction = new InputAction("Reload", InputActionType.Button);
+        reloadAction.AddBinding("<Keyboard>/r");
+
+        toggleFireModeAction = new InputAction("ToggleFireMode", InputActionType.Button);
+        toggleFireModeAction.AddBinding("<Keyboard>/v");
     }
 
     private void OnEnable()
@@ -58,6 +68,8 @@ public class ThirdPersonInput : MonoBehaviour
         aimAction.Enable();
         freeLookAction.Enable();
         fireAction.Enable();
+        reloadAction.Enable();
+        toggleFireModeAction.Enable();
     }
 
     private void OnDisable()
@@ -69,6 +81,8 @@ public class ThirdPersonInput : MonoBehaviour
         aimAction.Disable();
         freeLookAction.Disable();
         fireAction.Disable();
+        reloadAction.Disable();
+        toggleFireModeAction.Disable();
     }
 
     private void Update()
@@ -81,5 +95,7 @@ public class ThirdPersonInput : MonoBehaviour
         FreeLookHeld = freeLookAction.IsPressed();
         FireHeld = fireAction.IsPressed();
         FirePressed = fireAction.WasPressedThisFrame();
+        ReloadPressed = reloadAction.WasPressedThisFrame();
+        ToggleFireModePressed = toggleFireModeAction.WasPressedThisFrame();
     }
 }
