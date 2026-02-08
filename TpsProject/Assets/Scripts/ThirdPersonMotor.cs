@@ -49,7 +49,7 @@ public class ThirdPersonMotor : MonoBehaviour
         Vector2 raw = (input != null) ? input.Move : Vector2.zero;
         Vector2 moveInput = Vector2.ClampMagnitude(raw, 1f);
 
-        bool aim = input != null && cameraController.IsAiming;
+        bool aim = (cameraController != null) && cameraController.IsAiming;
         bool freeLook = input != null && input.FreeLookHeld;
 
         bool sprint = (input != null) && input.SprintHeld && !aim;

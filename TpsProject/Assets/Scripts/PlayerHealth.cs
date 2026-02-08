@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class PlayerHealth : MonoBehaviour, IDamageable
+public class PlayerHealth : MonoBehaviour//, IDamageable
 {
     [Header("Health")]
     [SerializeField] private float maxHealth = 100f;
@@ -23,12 +23,12 @@ public class PlayerHealth : MonoBehaviour, IDamageable
         ApplyAnimatorState();
     }
 
-    public void TakeDamage(float amount, Vector3 hitPoint, Vector3 hitDirection)
+    public void TakeDamage(float amount)//, Vector3 hitPoint, Vector3 hitDirection)
     {
         if (IsDead) return;
         if (amount <= 0f) return;
 
-        CurrentHealth = Mathf.Max(9f, CurrentHealth - amount);
+        CurrentHealth = Mathf.Max(0f, CurrentHealth - amount);
 
         if (animator != null && !string.IsNullOrEmpty(hitTrigger))
             animator.SetTrigger(hitTrigger);
