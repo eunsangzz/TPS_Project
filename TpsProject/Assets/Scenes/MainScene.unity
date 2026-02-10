@@ -905,6 +905,201 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 421}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &875614054
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 875614061}
+  - component: {fileID: 875614060}
+  - component: {fileID: 875614059}
+  - component: {fileID: 875614058}
+  - component: {fileID: 875614057}
+  - component: {fileID: 875614056}
+  - component: {fileID: 875614055}
+  m_Layer: 0
+  m_Name: Long
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &875614055
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 875614054}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 01d15f34d52432c4cb34cad0fec994ea, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyHealth
+  maxHealth: 100
+  currentHealth: 100
+  regenPerSecond: 2
+  regenDelayAfterHit: 2
+  destroyDelay: 2
+--- !u!114 &875614056
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 875614054}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d49ff9f118b019240bfad8f1311e7343, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyAI
+  enemyType: 0
+  player: {fileID: 0}
+  head: {fileID: 875614061}
+  health: {fileID: 0}
+  patrolAreas:
+  - {fileID: 22499013}
+  viewDistance: 15
+  viewAngleTotal: 100
+  obstacleMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  useLineOfSight: 1
+  chaseStopDistance: 1.5
+  loseSightTime: 2
+  repathInterval: 0.2
+  meleeRange: 1.2
+  meleeDamage: 10
+  meleeAttackRate: 1.5
+  meleeMoveSpeed: 4.5
+  rangedRange: 18
+  rangedDamage: 12
+  rangedAttackRate: 0.6
+  rangedMoveSpeed: 2.8
+  rangedDetectDistance: 25
+  projectilePrefab: {fileID: 0}
+  firePoint: {fileID: 0}
+  projectileSpeed: 25
+  trunSpeed: 12
+  modelRoot: {fileID: 0}
+--- !u!195 &875614057
+NavMeshAgent:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 875614054}
+  m_Enabled: 1
+  m_AgentTypeID: 0
+  m_Radius: 0.5
+  m_Speed: 3.5
+  m_Acceleration: 8
+  avoidancePriority: 50
+  m_AngularSpeed: 120
+  m_StoppingDistance: 0
+  m_AutoTraverseOffMeshLink: 1
+  m_AutoBraking: 1
+  m_AutoRepath: 1
+  m_Height: 1
+  m_BaseOffset: 0
+  m_WalkableMask: 4294967295
+  m_ObstacleAvoidanceType: 4
+--- !u!65 &875614058
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 875614054}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1.0176392, y: 1, z: 1}
+  m_Center: {x: 0.00881958, y: 0, z: 0}
+--- !u!23 &875614059
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 875614054}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!33 &875614060
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 875614054}
+  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!4 &875614061
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 875614054}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 74.13, y: 1.176, z: 69.08}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &881755315
 GameObject:
   m_ObjectHideFlags: 0
@@ -1683,7 +1878,7 @@ PrefabInstance:
     - target: {fileID: 2836004473841745626, guid: 199b908833734dc4fb24557306ab0f27, type: 3}
       propertyPath: m_Controller
       value: 
-      objectReference: {fileID: 9100000, guid: 3b5f14d5fd564c749b2645ccc9eed49a, type: 2}
+      objectReference: {fileID: 0}
     - target: {fileID: 2836004475591197023, guid: 199b908833734dc4fb24557306ab0f27, type: 3}
       propertyPath: m_LocalPosition.x
       value: 85.90486
@@ -1727,6 +1922,10 @@ PrefabInstance:
     - target: {fileID: 2836004475591695743, guid: 199b908833734dc4fb24557306ab0f27, type: 3}
       propertyPath: m_Name
       value: LongRange
+      objectReference: {fileID: 0}
+    - target: {fileID: 2836004475591695743, guid: 199b908833734dc4fb24557306ab0f27, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -1834,6 +2033,8 @@ MonoBehaviour:
   projectilePrefab: {fileID: 0}
   firePoint: {fileID: 0}
   projectileSpeed: 25
+  trunSpeed: 12
+  modelRoot: {fileID: 0}
 --- !u!4 &1214064507 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2836004475591197023, guid: 199b908833734dc4fb24557306ab0f27, type: 3}
@@ -1855,6 +2056,7 @@ MonoBehaviour:
   currentHealth: 100
   regenPerSecond: 2
   regenDelayAfterHit: 2
+  destroyDelay: 2
 --- !u!1001 &1226727010
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1866,7 +2068,7 @@ PrefabInstance:
     - target: {fileID: 2836004473841745626, guid: f432554f564e69242897607d34218939, type: 3}
       propertyPath: m_Controller
       value: 
-      objectReference: {fileID: 9100000, guid: 3b5f14d5fd564c749b2645ccc9eed49a, type: 2}
+      objectReference: {fileID: 0}
     - target: {fileID: 2836004473841745626, guid: f432554f564e69242897607d34218939, type: 3}
       propertyPath: m_ApplyRootMotion
       value: 0
@@ -1914,6 +2116,10 @@ PrefabInstance:
     - target: {fileID: 2836004475591695743, guid: f432554f564e69242897607d34218939, type: 3}
       propertyPath: m_Name
       value: ShortRange
+      objectReference: {fileID: 0}
+    - target: {fileID: 2836004475591695743, guid: f432554f564e69242897607d34218939, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -2021,6 +2227,8 @@ MonoBehaviour:
   projectilePrefab: {fileID: 0}
   firePoint: {fileID: 0}
   projectileSpeed: 25
+  trunSpeed: 12
+  modelRoot: {fileID: 0}
 --- !u!4 &1226727016 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2836004475591197023, guid: f432554f564e69242897607d34218939, type: 3}
@@ -2042,6 +2250,7 @@ MonoBehaviour:
   currentHealth: 100
   regenPerSecond: 2
   regenDelayAfterHit: 2
+  destroyDelay: 2
 --- !u!1 &1299440773
 GameObject:
   m_ObjectHideFlags: 0
@@ -3142,3 +3351,4 @@ SceneRoots:
   - {fileID: 1214064501}
   - {fileID: 1226727010}
   - {fileID: 1483134032}
+  - {fileID: 875614061}

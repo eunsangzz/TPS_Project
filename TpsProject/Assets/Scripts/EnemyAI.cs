@@ -47,6 +47,9 @@ public class EnemyAI : MonoBehaviour
     public Transform firePoint;
     public float projectileSpeed = 25f;
 
+    [Header("Rotation")]
+    public float trunSpeed = 50f;
+
     private NavMeshAgent agent;
 
     private enum State { Patrol, Chase, Attack}
@@ -59,11 +62,15 @@ public class EnemyAI : MonoBehaviour
     private float nextRepathTime;
     private float nextAttackTime;
 
+    public Transform modelRoot;
+
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>();
         if (health == null) health = GetComponent<EnemyHealth>();
         if (head == null) head = transform;
+
+        agent.updateRotation = false;
 
         ApplyTypeState();
     }
@@ -92,10 +99,12 @@ public class EnemyAI : MonoBehaviour
         {
             case State.Patrol:
                 PatrolTick(canSee);
+                FaceMoveDirection();
                 break;
 
             case State.Chase:
                 ChaseTick(canSee);
+                FaceMoveDirection();
                 break;
 
             case State.Attack:
@@ -274,7 +283,25 @@ public class EnemyAI : MonoBehaviour
 
     private void KeepUpright()
     {
-        var e = transform.eulerAngles;
-        transform.rotation = Quaternion.Euler(0f, e.y, 0f);
+        if (transform.rotation.x != 0 || transform.rotation.z != 0)
+        {
+            transform.rotation = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
+        }
+    }
+
+    private void FaceMoveDirection()
+    {
+        if (agent == null) return;
+
+        Vector3 v = agent.desiredVelocity;
+        v.y = 0f;
+
+        if (v.sqrMagnitude < 0.01f) return;
+
+        Quaternion rot = Quaternion.LookRotation(v.normalized);
+        //transform.rotation = Quaternion.Slerp(transform.rotation, rot, Time.deltaTime * trunSpeed);
+        Transform t = (modelRoot != null) ? modelRoot : transform;
+
+        t.rotation = Quaternion.Slerp(t.rotation, rot, Time.deltaTime * trunSpeed);
     }
 }

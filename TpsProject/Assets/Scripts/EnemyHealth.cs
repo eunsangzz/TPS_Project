@@ -1,6 +1,7 @@
 using UnityEngine;
+using UnityEngine.AI;
 
-public class EnemyHealth : MonoBehaviour
+public class EnemyHealth : MonoBehaviour, IDamageable
 {
     [Header("Health")]
     public float maxHealth = 100f;
@@ -10,9 +11,13 @@ public class EnemyHealth : MonoBehaviour
     public float regenPerSecond = 2f;
     public float regenDelayAfterHit = 2f;
 
-    private float lastHitTime;
+    [Header("Death")]
+    public float destroyDelay = 2f;
 
-    public bool IsDead => currentHealth <= 0f;
+    private float lastHitTime;
+    private bool isDead;
+
+    public bool IsDead => isDead || currentHealth <= 0f;
 
     private void Awake()
     {
@@ -29,18 +34,33 @@ public class EnemyHealth : MonoBehaviour
         }
     }
 
-    public void TakeDamage(float dmg)
+    public void TakeDamage(float amount, Vector3 hitPoint, Vector3 hitDirection)
+    {
+        ApplyDamage(amount);
+    }
+
+    public void ApplyDamage(float dmg)
     {
         if (IsDead) return;
+        if (dmg <= 0f) return;
 
         lastHitTime = Time.time;
         currentHealth = Mathf.Max(0f, currentHealth - dmg);
 
-        if (IsDead) Die();
+        if (currentHealth <= 0f) Die();
     }
 
     private void Die()
     {
-        Destroy(gameObject, 2f);
+        if (isDead) return;
+        isDead = true;
+
+        var agent = GetComponent<NavMeshAgent>();
+        if (agent != null) agent.enabled = false;
+
+        var cols = GetComponentsInChildren<Collider>();
+        foreach (var c in cols) c.enabled = false;
+
+        Destroy(gameObject, destroyDelay);
     }
 }
