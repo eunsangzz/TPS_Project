@@ -131,7 +131,7 @@ public class ThirdPersonMotor : MonoBehaviour
         if (grounded && velocity.y < 0f) velocity.y = groundedStickForce;
        
 
-        if(grounded && input.JumpPressed) velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+        if(grounded && input != null  &&input.JumpPressed) velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
 
         velocity.y += gravity * Time.deltaTime;
     }

@@ -48,10 +48,14 @@ public class EnemyAI : MonoBehaviour
     public float projectileSpeed = 25f;
 
     [Header("Rotation")]
-    public float trunSpeed = 50f;
+    public float turnSpeed = 10f;
+
+    [Header("Model")]
+    public Transform modelRoot;
 
     private NavMeshAgent agent;
 
+    private Vector3 smoothDir;
     private enum State { Patrol, Chase, Attack}
     private State state = State.Patrol;
 
@@ -61,8 +65,6 @@ public class EnemyAI : MonoBehaviour
     private float lastSeenTime = -999f;
     private float nextRepathTime;
     private float nextAttackTime;
-
-    public Transform modelRoot;
 
     private void Awake()
     {
@@ -278,14 +280,20 @@ public class EnemyAI : MonoBehaviour
         if (look.sqrMagnitude < 0.0001f) return;
 
         Quaternion rot = Quaternion.LookRotation(look.normalized);
-        transform.rotation = Quaternion.Slerp(transform.rotation, rot, Time.deltaTime * 10f);
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, rot, turnSpeed * Time.deltaTime);
     }
 
     private void KeepUpright()
     {
-        if (transform.rotation.x != 0 || transform.rotation.z != 0)
+        Vector3 e = transform.eulerAngles;
+        Quaternion upright = Quaternion.Euler(0f, e.y, 0f);
+        transform.rotation = Quaternion.Slerp(transform.rotation, upright, 1f - Mathf.Exp(-10f * Time.deltaTime));
+
+        if(modelRoot != null)
         {
-            transform.rotation = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
+            Vector3 me = modelRoot.eulerAngles;
+            Quaternion mu = Quaternion.Euler(0f, me.y, 0f);
+            modelRoot.rotation = Quaternion.Slerp(modelRoot.rotation, mu, 1f - Mathf.Exp(-10f * Time.deltaTime));
         }
     }
 
@@ -293,15 +301,48 @@ public class EnemyAI : MonoBehaviour
     {
         if (agent == null) return;
 
-        Vector3 v = agent.desiredVelocity;
-        v.y = 0f;
-
-        if (v.sqrMagnitude < 0.01f) return;
-
-        Quaternion rot = Quaternion.LookRotation(v.normalized);
-        //transform.rotation = Quaternion.Slerp(transform.rotation, rot, Time.deltaTime * trunSpeed);
         Transform t = (modelRoot != null) ? modelRoot : transform;
 
-        t.rotation = Quaternion.Slerp(t.rotation, rot, Time.deltaTime * trunSpeed);
+        Vector3 dir = agent.steeringTarget - t.position;
+        dir.y = 0f;
+
+        if (dir.sqrMagnitude < 0.0001f) return;
+
+        if (smoothDir == Vector3.zero) smoothDir = dir;
+        float sharpness = 12f;
+
+        smoothDir = Vector3.Slerp(smoothDir, dir, 1f - Mathf.Exp(-sharpness * Time.deltaTime));
+
+        Quaternion rot = Quaternion.LookRotation(smoothDir.normalized, Vector3.up);
+
+        Vector3 e = rot.eulerAngles;
+        rot = Quaternion.Euler(0f, e.y, 0f);
+        
+        t.rotation = Quaternion.RotateTowards(t.rotation, rot, turnSpeed * Time.deltaTime);
+    }
+
+    [Header("Debug Draw")]
+    public bool debugDrawVision = true;
+
+    private void OnDrawGizmos()
+    {
+        if (!debugDrawVision) return;
+
+        float dist = (enemyType == EnemyType.Ranged) ? rangedDetectDistance : viewDistance;
+
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, dist);
+
+        Vector3 origin = (head != null ? head.position : transform.position) + Vector3.up * 0.1f;
+        float half = viewAngleTotal * 0.5f;
+
+        Vector3 forward = (head != null ? head.forward : transform.forward);
+        Vector3 leftDir = Quaternion.AngleAxis(-half, Vector3.up) * forward;
+        Vector3 rightDir = Quaternion.AngleAxis(half, Vector3.up) * forward;
+
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawLine(origin, origin + forward * dist);
+        Gizmos.DrawLine(origin, origin + leftDir * dist);
+        Gizmos.DrawLine(origin, origin + rightDir * dist);
     }
 }

@@ -114,6 +114,10 @@ public class ThirdPersonCamera : MonoBehaviour
         UpdateCameraFov();
 
         HandleLook();
+    }
+
+    private void LateUpdate()
+    {
         ApplyRecoil();
         FollowTarget();
         HandleCollision();
