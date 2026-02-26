@@ -2442,6 +2442,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 7673487251499248760, guid: c98043d57e0190845b790d7b92990bee, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1564931715}
+    - targetCorrespondingSourceObject: {fileID: 7673487251499248760, guid: c98043d57e0190845b790d7b92990bee, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1564931717}
+    - targetCorrespondingSourceObject: {fileID: 7673487251499248760, guid: c98043d57e0190845b790d7b92990bee, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1564931716}
   m_SourcePrefab: {fileID: 100100000, guid: c98043d57e0190845b790d7b92990bee, type: 3}
 --- !u!1 &1475454145
 GameObject:
@@ -2689,6 +2695,50 @@ MonoBehaviour:
   hitTrigger: Hit
   dieTrigger: Die
   isDeadBool: IsDead
+--- !u!114 &1564931716
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1564931707}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6cc98f80b9e2e8b49ab87bb835b749bc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CoverController
+  toggleCoverKey: 101
+  useCharacterController: 1
+  slideSpeed: 3.5
+  snapSpeed: 14
+  maxSlideCheckDistance: 1.2
+  stickDistance: 0.4
+  rotateSpeed: 12
+  cornerProbeOffset: 0.4
+  cornerForawrdProbe: 0.8
+  drawDebug: 1
+  input: {fileID: 1564931709}
+--- !u!114 &1564931717
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1564931707}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f8a7b0b61da542f418753e296551dd4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CoverDetector
+  coverMask:
+    serializedVersion: 2
+    m_Bits: 128
+  detectDistance: 1.2
+  chestHeight: 1.2
+  sphereRadius: 0.25
+  coverOffset: 0.35
+  minWallDotUp: 0.2
+  drawDebug: 1
 --- !u!1 &1631377697
 GameObject:
   m_ObjectHideFlags: 0

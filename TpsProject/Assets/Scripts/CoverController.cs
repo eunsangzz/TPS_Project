@@ -37,6 +37,8 @@ public class CoverController : MonoBehaviour
     Vector3 coverRight;
     Vector3 coverTargetPos;
 
+    public ThirdPersonInput input;
+
     public float CoverMoveInputX { get; set; }
 
     private void Awake()
@@ -59,7 +61,7 @@ public class CoverController : MonoBehaviour
     {
         detector.TickDetect(transform.forward);
 
-        if(Input.GetKeyDown(toggleCoverKey))
+        if(input != null && input.CoverPressed)
         {
             if(!InCover)
             {
@@ -87,7 +89,7 @@ public class CoverController : MonoBehaviour
         coverRight = detector.CoverRight;
         coverTargetPos = detector.TargetPosition;
 
-        SnapToCover(Instantiate: false);
+        SnapToCover(instant: false);
     }
 
     void ExitCover()
@@ -109,15 +111,18 @@ public class CoverController : MonoBehaviour
         else
         {
             Vector3 newPos = Vector3.Lerp(pos, target, Time.deltaTime * snapSpeed);
-            SetPosition();
+            SetPosition(newPos);
         }
     }
 
     void UpdateCoverMovement()
     {
-        float inputX = CoverMoveInputX;
-        if (Mathf.Approximately(inputX, 0f))
-            inputX = Input.GetAxisRaw("Horizontal");
+        float inputX = 0f;
+
+        if(input != null)
+        {
+            inputX = input.Move.x;
+        }
 
         Vector3 desired = coverRight * inputX;
 
@@ -138,7 +143,7 @@ public class CoverController : MonoBehaviour
         }
     }
 
-    void UpdataCoverRotation()
+    void UpdateCoverRotation()
     {
         //엄폐시 벽향하지 않게 forward 벽 접선 방향 설정 현재 바로보는 쪽 가까운곳으로
         Vector3 tangentA = coverRight;
@@ -171,6 +176,62 @@ public class CoverController : MonoBehaviour
         Vector3 origin = pos + Vector3.up * detector.chestHeight;
         return Physics.Raycast(origin, -normal, out _, maxSlideCheckDistance, detector.coverMask, QueryTriggerInteraction.Ignore);
 
+    }
+
+    public bool CanPeekLeft()
+    {
+        if (!InCover) return false;
+        Vector3 pos = GetPosition();
+        Vector3 probeOrigin = pos + Vector3.up * detector.chestHeight + (-coverRight * cornerProbeOffset);
+        return !Physics.Raycast(probeOrigin, transform.forward, cornerForawrdProbe, detector.coverMask, QueryTriggerInteraction.Ignore);
+
+    }
+
+    public bool CanPeekRight()
+    {
+        if (!InCover) return false;
+        Vector3 pos = GetPosition();
+        Vector3 probeOrigin = pos + Vector3.up * detector.chestHeight + (coverRight * cornerProbeOffset);
+        return !Physics.Raycast(probeOrigin, transform.forward, cornerForawrdProbe, detector.coverMask, QueryTriggerInteraction.Ignore);
+    }
+
+    Vector3 GetPosition()
+    {
+        if (useCharacterController && cc != null) return transform.position;
+        if (rb != null) return rb.position;
+        return transform.position;
+    }
+
+    void SetPosition(Vector3 p)
+    {
+        if (useCharacterController && cc != null)
+        {
+            transform.position = p;
+        }
+        else if (rb != null)
+        {
+            rb.MovePosition(p);
+        }
+        else
+        {
+            transform.position = p;
+        }
+    }
+
+    void Move(Vector3 delta)
+    {
+        if (useCharacterController && cc != null)
+        {
+            cc.Move(delta);
+        }
+        else if (rb != null)
+        {
+            rb.MovePosition(rb.position + delta);
+        }
+        else
+        {
+            transform.position += delta;
+        }
     }
 
 }

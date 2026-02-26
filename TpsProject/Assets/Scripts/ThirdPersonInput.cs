@@ -13,6 +13,7 @@ public class ThirdPersonInput : MonoBehaviour
     public bool FirePressed { get; private set; }
     public bool ReloadPressed { get; private set; }
     public bool ToggleFireModePressed { get; private set; }
+    public bool CoverPressed { get; private set; }
 
     private InputAction moveAction;
     private InputAction lookAction;
@@ -23,6 +24,7 @@ public class ThirdPersonInput : MonoBehaviour
     private InputAction fireAction;
     private InputAction reloadAction;
     private InputAction toggleFireModeAction;
+    private InputAction coverAction;
 
     private void Awake()
     {
@@ -57,6 +59,9 @@ public class ThirdPersonInput : MonoBehaviour
 
         toggleFireModeAction = new InputAction("ToggleFireMode", InputActionType.Button);
         toggleFireModeAction.AddBinding("<Keyboard>/v");
+
+        coverAction = new InputAction("Cover", InputActionType.Button);
+        coverAction.AddBinding("<Keyboard>/e");
     }
 
     private void OnEnable()
@@ -70,6 +75,7 @@ public class ThirdPersonInput : MonoBehaviour
         fireAction.Enable();
         reloadAction.Enable();
         toggleFireModeAction.Enable();
+        coverAction.Enable();
     }
 
     private void OnDisable()
@@ -83,6 +89,7 @@ public class ThirdPersonInput : MonoBehaviour
         fireAction.Disable();
         reloadAction.Disable();
         toggleFireModeAction.Disable();
+        coverAction.Disable();
     }
 
     private void Update()
@@ -97,5 +104,6 @@ public class ThirdPersonInput : MonoBehaviour
         FirePressed = fireAction.WasPressedThisFrame();
         ReloadPressed = reloadAction.WasPressedThisFrame();
         ToggleFireModePressed = toggleFireModeAction.WasPressedThisFrame();
+        CoverPressed = coverAction.WasPressedThisFrame();
     }
 }
