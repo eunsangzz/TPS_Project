@@ -19,7 +19,7 @@ MonoBehaviour:
     width: 2560
     height: 1357
   m_ShowMode: 4
-  m_Title: Hierarchy
+  m_Title: Scene
   m_RootView: {fileID: 6}
   m_MinSize: {x: 875, y: 338}
   m_MaxSize: {x: 10000, y: 10000}
@@ -75,7 +75,7 @@ MonoBehaviour:
   m_MinSize: {x: 300, y: 112}
   m_MaxSize: {x: 24288, y: 16192}
   vertical: 0
-  controlID: 16
+  controlID: 54
   draggingID: 0
 --- !u!114 &4
 MonoBehaviour:
@@ -122,8 +122,8 @@ MonoBehaviour:
     y: 998
     width: 1751
     height: 303
-  m_MinSize: {x: 100, y: 100}
-  m_MaxSize: {x: 4000, y: 4000}
+  m_MinSize: {x: 101, y: 126}
+  m_MaxSize: {x: 4001, y: 4026}
   m_ActualView: {fileID: 17}
   m_Panes:
   - {fileID: 12}
@@ -588,13 +588,13 @@ MonoBehaviour:
   m_FolderTreeState:
     scrollPos: {x: 0, y: 79}
     m_SelectedIDs:
-    - m_Data: 47626
+    - m_Data: 47650
     m_LastClickedID:
-      m_Data: 47626
+      m_Data: 47650
     m_ExpandedIDs:
     - m_Data: 0
-    - m_Data: 47514
-    - m_Data: 47516
+    - m_Data: 47530
+    - m_Data: 47532
     - m_Data: 1000000000
     m_RenameOverlay:
       m_UserAcceptedRename: 0
@@ -628,8 +628,8 @@ MonoBehaviour:
       m_Data: 0
     m_ExpandedIDs:
     - m_Data: 0
-    - m_Data: 47514
-    - m_Data: 47516
+    - m_Data: 47530
+    - m_Data: 47532
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name: 
@@ -657,8 +657,8 @@ MonoBehaviour:
       m_ResourceFile: 
   m_ListAreaState:
     m_SelectedInstanceIDs:
-    - m_Data: 46278
-    m_LastClickedInstanceID: 46278
+    - m_Data: 34934
+    m_LastClickedInstanceID: 34934
     m_HadKeyboardFocusLastEvent: 1
     m_ExpandedInstanceIDs: []
     m_RenameOverlay:
@@ -782,11 +782,14 @@ MonoBehaviour:
   m_SceneHierarchy:
     m_TreeViewState:
       scrollPos: {x: 0, y: 0}
-      m_SelectedIDs: []
+      m_SelectedIDs:
+      - m_Data: 46282
       m_LastClickedID:
-        m_Data: 0
+        m_Data: 46282
       m_ExpandedIDs:
       - m_Data: -1294
+      - m_Data: 46254
+      - m_Data: 46282
       m_RenameOverlay:
         m_UserAcceptedRename: 0
         m_Name: 
@@ -1239,9 +1242,9 @@ MonoBehaviour:
   m_AudioPlay: 0
   m_DebugDrawModesUseInteractiveLightBakingData: 0
   m_Position:
-    m_Target: {x: 333.93826, y: -48.116997, z: -91.699936}
+    m_Target: {x: 43.25117, y: -1.3273433, z: 50.281944}
     speed: 2
-    m_Value: {x: 333.93826, y: -48.116997, z: -91.699936}
+    m_Value: {x: 43.25117, y: -1.3273433, z: 50.281944}
   m_RenderMode: 0
   m_CameraMode:
     drawMode: 0
@@ -1287,13 +1290,13 @@ MonoBehaviour:
     m_GridAxis: 1
     m_gridOpacity: 0.5
   m_Rotation:
-    m_Target: {x: 0.041628152, y: 0.8513368, z: -0.067981474, w: 0.51826143}
+    m_Target: {x: 0.026998412, y: 0.9610507, z: -0.2554368, w: 0.1005899}
     speed: 2
-    m_Value: {x: 0.041633908, y: 0.8514545, z: -0.06799087, w: 0.5183331}
+    m_Value: {x: 0.027002279, y: 0.9611884, z: -0.2554734, w: 0.10060431}
   m_Size:
-    m_Target: 160.22011
+    m_Target: 4.0155
     speed: 2
-    m_Value: 160.22011
+    m_Value: 4.0155
   m_Ortho:
     m_Target: 0
     speed: 2

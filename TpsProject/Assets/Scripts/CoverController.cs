@@ -13,12 +13,16 @@ public class CoverController : MonoBehaviour
     public float maxSlideCheckDistance = 1.2f;
 
     [Header("Stick To Wall")]
-    public float stickDistance = 0.4f;
+    public float stickDistance = 0.8f;
     public float rotateSpeed = 12f;
 
     [Header("Corner Peek")]
     public float cornerProbeOffset = 0.4f;
     public float cornerForawrdProbe = 0.8f;
+
+    [Header("References")]
+    public ThirdPersonInput input;
+    public Transform cameraRoot;
 
     [Header("Debug")]
     public bool drawDebug = true;
@@ -36,10 +40,11 @@ public class CoverController : MonoBehaviour
     Vector3 coverNormal;
     Vector3 coverRight;
     Vector3 coverTargetPos;
-
-    public ThirdPersonInput input;
+    Vector3 coverPointAtEnter;
 
     public float CoverMoveInputX { get; set; }
+
+    float autoExitBlockUntil;
 
     private void Awake()
     {
@@ -47,19 +52,18 @@ public class CoverController : MonoBehaviour
         cc = GetComponent<CharacterController>();
         rb = GetComponent<Rigidbody>();
 
-        if (useCharacterController && cc == null)
-        {
-            Debug.LogWarning("[CoverController] useCharacterController=true인데 CharacterController가 없습니다. Rigidbody 모드로 바꾸거나 CharacterController를 추가하세요.");
-        }
-        if (!useCharacterController && rb == null)
-        {
-            Debug.LogWarning("[CoverController] Rigidbody 모드인데 Rigidbody가 없습니다. Rigidbody를 추가하거나 CharacterController 모드로 바꾸세요.");
-        }
+        if (input == null) input = GetComponent<ThirdPersonInput>();
+        if (cameraRoot == null && Camera.main != null) cameraRoot = Camera.main.transform;
     }
 
     void Update()
     {
-        detector.TickDetect(transform.forward);
+        if (!InCover)
+        {
+            Vector3 dir = GetDetectDirection();
+            detector.TickDetect(dir);
+        }
+
 
         if(input != null && input.CoverPressed)
         {
@@ -75,10 +79,26 @@ public class CoverController : MonoBehaviour
 
         if(InCover)
         {
+            SnapToCover(false);
             UpdateCoverMovement();
             UpdateCoverRotation();
             AutoExitIfNoWall();
         }
+    }
+
+    Vector3 GetDetectDirection()
+    {
+        Vector3 dir = transform.forward;
+
+        if (cameraRoot != null)
+        {
+            dir = cameraRoot.forward;
+            dir.y = 0f;
+            if (dir.sqrMagnitude > 0.0001f) dir.Normalize();
+            else dir = transform.forward;
+        }
+
+        return dir;
     }
 
     void EnterCover()
@@ -87,15 +107,41 @@ public class CoverController : MonoBehaviour
 
         coverNormal = detector.CoverNormal;
         coverRight = detector.CoverRight;
-        coverTargetPos = detector.TargetPosition;
 
-        SnapToCover(instant: false);
+        Vector3 toPlayer = (transform.position - detector.CoverPoint);
+        toPlayer.y = 0f;
+        if (toPlayer.sqrMagnitude > 0.0001f)
+        {
+            toPlayer.Normalize();
+            if (Vector3.Dot(coverNormal, toPlayer) < 0f)
+                coverNormal = -coverNormal;
+        }
+
+        coverTargetPos = detector.CoverPoint + coverNormal * detector.coverOffset;
+
+        Vector3 refForward = transform.forward;
+        if (cameraRoot != null)
+        {
+            refForward = cameraRoot.forward;
+            refForward.y = 0f;
+            if (refForward.sqrMagnitude > 0.0001f) refForward.Normalize();
+        }
+
+        if (Vector3.Dot(coverRight, refForward) < 0f)
+            coverRight = -coverRight;
+
+        autoExitBlockUntil = Time.time + 0.25f;
+
+        SnapToCover(true);
+
+        Debug.Log("ENTER COVER");
+
     }
 
     void ExitCover()
     {
+        Debug.Log("EXIT COVER");
         InCover = false;
-        CoverMoveInputX = 0f;
 
     }
 
@@ -110,8 +156,7 @@ public class CoverController : MonoBehaviour
         }
         else
         {
-            Vector3 newPos = Vector3.Lerp(pos, target, Time.deltaTime * snapSpeed);
-            SetPosition(newPos);
+            SetPosition(Vector3.Lerp(pos, target, Time.deltaTime * snapSpeed));
         }
     }
 
@@ -123,6 +168,8 @@ public class CoverController : MonoBehaviour
         {
             inputX = input.Move.x;
         }
+
+        if (Mathf.Abs(inputX) < 0.001f) return;
 
         Vector3 desired = coverRight * inputX;
 
@@ -162,13 +209,17 @@ public class CoverController : MonoBehaviour
 
     void AutoExitIfNoWall()
     {
+        if (Time.time < autoExitBlockUntil) return;
+
         Vector3 origin = transform.position + Vector3.up * detector.chestHeight;
-        bool hit = Physics.Raycast(origin, -coverNormal, out _, stickDistance, detector.coverMask, QueryTriggerInteraction.Ignore);
+
+        Vector3 dir = -coverNormal;
+
+        float r = 0.20f;
+        bool hit = Physics.SphereCast(origin, r, dir, out _, stickDistance + 0.2f, detector.coverMask, QueryTriggerInteraction.Ignore);
 
         if (!hit)
-        {
             ExitCover();
-        }
     }
 
     bool HasWallAt(Vector3 pos, Vector3 normal)

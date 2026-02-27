@@ -19,6 +19,7 @@ public class ThirdPersonMotor : MonoBehaviour
     [SerializeField] private ThirdPersonInput input;
     [SerializeField] private ThirdPersonCamera cameraController;
     [SerializeField] private Animator animator;
+    [SerializeField] private CoverController cover;
 
     private CharacterController controller;
 
@@ -34,6 +35,7 @@ public class ThirdPersonMotor : MonoBehaviour
         controller = GetComponent<CharacterController>();
         if (input == null) input = GetComponent<ThirdPersonInput>();
         if (animator == null) animator = GetComponentInChildren<Animator>();
+        if (cover == null) cover = GetComponent<CoverController>();
     }
 
     private void Update()
@@ -54,10 +56,19 @@ public class ThirdPersonMotor : MonoBehaviour
 
         bool sprint = (input != null) && input.SprintHeld && !aim;
 
+        bool inCover = (cover != null && cover.InCover); 
+
         float targetSpeed = sprint ? sprintSpeed : moveSpeed;
         float targetMagnitude = moveInput.magnitude * targetSpeed;
 
         currentSpeed = Mathf.MoveTowards(currentSpeed, targetMagnitude, acceleration * Time.deltaTime);
+
+        if(inCover)
+        {
+            currentMove = Vector3.zero;
+            currentSpeed = 0f;
+            return;
+        }
 
         if (moveInput.sqrMagnitude < 0.0001f)
         {
