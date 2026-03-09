@@ -2720,7 +2720,7 @@ MonoBehaviour:
   stickDistance: 0.4
   rotateSpeed: 12
   cornerProbeOffset: 0.4
-  cornerForawrdProbe: 0.8
+  cornerForwrdProbe: 0.8
   input: {fileID: 1564931709}
   cameraRoot: {fileID: 0}
   drawDebug: 1
@@ -2765,7 +2765,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &1631377699
 MonoBehaviour:
   m_ObjectHideFlags: 0

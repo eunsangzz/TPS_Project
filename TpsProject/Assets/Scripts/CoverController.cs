@@ -6,7 +6,7 @@ public class CoverController : MonoBehaviour
     [Header("Input")]
     public KeyCode toggleCoverKey = KeyCode.E;
 
-    [Header("Movermonet Mode")]
+    [Header("Movement Mode")]
     public bool useCharacterController = true;
     public float slideSpeed = 3.5f;
     public float snapSpeed = 14f;
@@ -18,7 +18,7 @@ public class CoverController : MonoBehaviour
 
     [Header("Corner Peek")]
     public float cornerProbeOffset = 0.4f;
-    public float cornerForawrdProbe = 0.8f;
+    public float cornerForwrdProbe = 0.8f;
 
     [Header("References")]
     public ThirdPersonInput input;
@@ -41,6 +41,8 @@ public class CoverController : MonoBehaviour
     Vector3 coverRight;
     Vector3 coverTargetPos;
     Vector3 coverPointAtEnter;
+
+    Vector3 slideRight;
 
     public float CoverMoveInputX { get; set; }
 
@@ -108,6 +110,15 @@ public class CoverController : MonoBehaviour
         coverNormal = detector.CoverNormal;
         coverRight = detector.CoverRight;
 
+        Vector3 tA = coverRight.normalized;
+        Vector3 tB = (-coverRight).normalized;
+
+        Vector3 camRight = cameraRoot != null ? cameraRoot.right : transform.right;
+        camRight.y = 0f;
+        if (camRight.sqrMagnitude > 0.0001f) camRight.Normalize();
+
+        slideRight = (Vector3.Dot(tA, camRight) >= Vector3.Dot(tB, camRight)) ? tA : tB;
+
         Vector3 toPlayer = (transform.position - detector.CoverPoint);
         toPlayer.y = 0f;
         if (toPlayer.sqrMagnitude > 0.0001f)
@@ -117,7 +128,8 @@ public class CoverController : MonoBehaviour
                 coverNormal = -coverNormal;
         }
 
-        coverTargetPos = detector.CoverPoint + coverNormal * detector.coverOffset;
+        coverPointAtEnter = detector.CoverPoint;
+        coverTargetPos = coverPointAtEnter + coverNormal * detector.coverOffset;
 
         Vector3 refForward = transform.forward;
         if (cameraRoot != null)
@@ -148,15 +160,28 @@ public class CoverController : MonoBehaviour
     void SnapToCover(bool instant)
     {
         Vector3 pos = GetPosition();
-        Vector3 target = new Vector3(coverTargetPos.x, pos.y, coverTargetPos.z);
 
-        if(instant)
+        Vector3 toWall = coverPointAtEnter - pos; // 플레이어위치 부터 벽까지
+        toWall.y = 0f;
+
+        float alongWallNormal = Vector3.Dot(toWall, -coverNormal); // 벽파고듬 확인
+
+        float desired = detector.coverOffset + 0.05f; //벽에서 떨어질거리
+
+        float delta = (alongWallNormal - desired); // 현재거리 이동량
+
+        Vector3 correction = (-coverNormal) * delta; // delta값에 따리 벽으로 당기고 밀어냄
+
+        correction.y = 0f;
+
+        if (instant)
         {
-            SetPosition(target);
+            SetPosition(pos + correction);
         }
         else
         {
-            SetPosition(Vector3.Lerp(pos, target, Time.deltaTime * snapSpeed));
+            Vector3 newPos = pos + correction;
+            SetPosition(Vector3.Lerp(pos, newPos, Time.deltaTime * snapSpeed));
         }
     }
 
@@ -171,7 +196,7 @@ public class CoverController : MonoBehaviour
 
         if (Mathf.Abs(inputX) < 0.001f) return;
 
-        Vector3 desired = coverRight * inputX;
+        Vector3 desired = slideRight * inputX;
 
         Vector3 delta = desired.normalized * (slideSpeed * Time.deltaTime);
 
@@ -192,14 +217,9 @@ public class CoverController : MonoBehaviour
 
     void UpdateCoverRotation()
     {
-        //엄폐시 벽향하지 않게 forward 벽 접선 방향 설정 현재 바로보는 쪽 가까운곳으로
-        Vector3 tangentA = coverRight;
-        Vector3 tangentB = -coverRight;
-
-        Vector3 currentForward = transform.forward;
-        Vector3 targetForward = (Vector3.Dot(currentForward, tangentA) > Vector3.Dot(currentForward, tangentB)) ? tangentA : tangentB;
-
+        Vector3 targetForward = slideRight;
         targetForward.y = 0f;
+
         if (targetForward.sqrMagnitude < 0.0001f) return;
 
         Quaternion targetRot = Quaternion.LookRotation(targetForward, Vector3.up);
@@ -216,8 +236,15 @@ public class CoverController : MonoBehaviour
         Vector3 dir = -coverNormal;
 
         float r = 0.20f;
-        bool hit = Physics.SphereCast(origin, r, dir, out _, stickDistance + 0.2f, detector.coverMask, QueryTriggerInteraction.Ignore);
 
+        float checkDistance = detector.coverOffset + 0.5f;
+        if (cc != null)
+        {
+            checkDistance += cc.radius;
+        }
+
+        bool hit = Physics.SphereCast(origin, r, dir, out _, checkDistance, detector.coverMask, QueryTriggerInteraction.Ignore);
+        
         if (!hit)
             ExitCover();
     }
@@ -233,8 +260,8 @@ public class CoverController : MonoBehaviour
     {
         if (!InCover) return false;
         Vector3 pos = GetPosition();
-        Vector3 probeOrigin = pos + Vector3.up * detector.chestHeight + (-coverRight * cornerProbeOffset);
-        return !Physics.Raycast(probeOrigin, transform.forward, cornerForawrdProbe, detector.coverMask, QueryTriggerInteraction.Ignore);
+        Vector3 probeOrigin = pos + Vector3.up * detector.chestHeight + (-slideRight);
+        return !Physics.Raycast(probeOrigin, transform.forward, cornerForwrdProbe, detector.coverMask, QueryTriggerInteraction.Ignore);
 
     }
 
@@ -242,8 +269,8 @@ public class CoverController : MonoBehaviour
     {
         if (!InCover) return false;
         Vector3 pos = GetPosition();
-        Vector3 probeOrigin = pos + Vector3.up * detector.chestHeight + (coverRight * cornerProbeOffset);
-        return !Physics.Raycast(probeOrigin, transform.forward, cornerForawrdProbe, detector.coverMask, QueryTriggerInteraction.Ignore);
+        Vector3 probeOrigin = pos + Vector3.up * detector.chestHeight + (slideRight);
+        return !Physics.Raycast(probeOrigin, transform.forward, cornerForwrdProbe, detector.coverMask, QueryTriggerInteraction.Ignore);
     }
 
     Vector3 GetPosition()
