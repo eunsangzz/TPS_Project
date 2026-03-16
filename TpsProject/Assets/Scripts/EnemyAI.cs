@@ -26,7 +26,7 @@ public class EnemyAI : MonoBehaviour
 
     [Header("Chase")]
     public float chaseStopDistance = 1.5f;
-    public float loseSightTime = 2f; //시야에서 사라지면 바로 멈추지말고 2초동안 추적
+    public float loseSightTime = 2f;
     public float repathInterval = 0.2f;
 
     [Header("Melee Setting")]
@@ -53,10 +53,19 @@ public class EnemyAI : MonoBehaviour
     [Header("Model")]
     public Transform modelRoot;
 
+    [Header("Tactics")]
+    public bool useTactics = true;
+    public float coverSearchRadius = 22f;
+    public float coverDecisionInterval = 1.0f;
+    public float coverArriveDistance = 1.0f;
+    public float peekDuration = 1.3f;
+    public float lowHealthCoverRatio = 0.55f;
+    public float coverRepathInterval = 0.3f;
+
     private NavMeshAgent agent;
 
     private Vector3 smoothDir;
-    private enum State { Patrol, Chase, Attack}
+    private enum State { Patrol, Chase, Attack, TakeCover, PeekShoot }
     private State state = State.Patrol;
 
     private float nextPatrolPickTime;
@@ -65,6 +74,14 @@ public class EnemyAI : MonoBehaviour
     private float lastSeenTime = -999f;
     private float nextRepathTime;
     private float nextAttackTime;
+    private float nextCoverDecisionTime;
+    private float nextCoverRepathTime;
+    private float peekEndTime;
+
+    private CoverPoint currentCover;
+
+    [Header("Debug Draw")]
+    public bool debugDrawVision = true;
 
     private void Awake()
     {
@@ -94,7 +111,6 @@ public class EnemyAI : MonoBehaviour
         if (player == null) return;
 
         bool canSee = CanSeePlayer();
-
         if (canSee) lastSeenTime = Time.time;
 
         switch (state)
@@ -111,6 +127,15 @@ public class EnemyAI : MonoBehaviour
 
             case State.Attack:
                 AttackTick(canSee);
+                break;
+
+            case State.TakeCover:
+                TakeCoverTick(canSee);
+                FaceMoveDirection();
+                break;
+
+            case State.PeekShoot:
+                PeekShootTick(canSee);
                 break;
         }
 
@@ -135,13 +160,13 @@ public class EnemyAI : MonoBehaviour
 
     private void PatrolTick(bool canSee)
     {
-        if(canSee)
+        if (canSee)
         {
             state = State.Chase;
             return;
         }
 
-        if(!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance + 0.1f)
+        if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance + 0.1f)
         {
             if (Time.time >= nextPatrolPickTime) PickNewPatrolTarget(false);
         }
@@ -149,26 +174,27 @@ public class EnemyAI : MonoBehaviour
 
     private void ChaseTick(bool canSee)
     {
-        if(!canSee && Time.time > lastSeenTime + loseSightTime)
+        if (TryEnterTacticalCover(canSee)) return;
+
+        if (!canSee && Time.time > lastSeenTime + loseSightTime)
         {
             state = State.Patrol;
+            currentCover = null;
             PickNewPatrolTarget(true);
             return;
         }
 
         float dist = Vector3.Distance(transform.position, player.position);
 
-        //경로 재탐색
-        if(Time.time >= nextRepathTime)
+        if (Time.time >= nextRepathTime)
         {
             nextRepathTime = Time.time + repathInterval;
             agent.isStopped = false;
             agent.SetDestination(player.position);
         }
 
-        //공격으로 타입변환
         float attackRange = (enemyType == EnemyType.Melee) ? meleeRange : rangedRange;
-        if(dist <= attackRange)
+        if (dist <= attackRange)
         {
             state = State.Attack;
             agent.isStopped = true;
@@ -177,6 +203,8 @@ public class EnemyAI : MonoBehaviour
 
     private void AttackTick(bool canSee)
     {
+        if (TryEnterTacticalCover(canSee)) return;
+
         float dist = Vector3.Distance(transform.position, player.position);
         float attackRange = (enemyType == EnemyType.Melee) ? meleeRange : rangedRange;
 
@@ -187,9 +215,10 @@ public class EnemyAI : MonoBehaviour
             return;
         }
 
-        if (!canSee && Time.time > lastSeenTime + loseSightTime) 
+        if (!canSee && Time.time > lastSeenTime + loseSightTime)
         {
             state = State.Patrol;
+            currentCover = null;
             PickNewPatrolTarget(true);
             return;
         }
@@ -200,11 +229,167 @@ public class EnemyAI : MonoBehaviour
             ? (1f / Mathf.Max(0.01f, meleeAttackRate))
             : (1f / Mathf.Max(0.01f, rangedAttackRate));
 
-        if(Time.time >= nextAttackTime)
+        if (Time.time >= nextAttackTime)
         {
             nextAttackTime = Time.time + interval;
             DoAttack();
         }
+    }
+
+    private void TakeCoverTick(bool canSee)
+    {
+        if (currentCover == null)
+        {
+            state = State.Chase;
+            return;
+        }
+
+        if (Time.time >= nextCoverRepathTime)
+        {
+            nextCoverRepathTime = Time.time + coverRepathInterval;
+            Vector3 desired = currentCover.GetStandPosition(player.position);
+            if (NavMesh.SamplePosition(desired, out NavMeshHit sampled, 2f, NavMesh.AllAreas))
+                desired = sampled.position;
+
+            agent.isStopped = false;
+            agent.SetDestination(desired);
+        }
+
+        if (!agent.pathPending && agent.remainingDistance <= coverArriveDistance)
+        {
+            if (enemyType == EnemyType.Ranged)
+            {
+                state = State.PeekShoot;
+                agent.isStopped = true;
+                peekEndTime = Time.time + peekDuration;
+            }
+            else
+            {
+                state = State.Chase;
+            }
+        }
+
+        if (!canSee && Time.time > lastSeenTime + loseSightTime)
+        {
+            state = State.Patrol;
+            currentCover = null;
+            PickNewPatrolTarget(true);
+        }
+    }
+
+    private void PeekShootTick(bool canSee)
+    {
+        if (currentCover == null)
+        {
+            state = State.Chase;
+            return;
+        }
+
+        FaceTarget(player.position);
+
+        float dist = Vector3.Distance(transform.position, player.position);
+        float attackRange = (enemyType == EnemyType.Melee) ? meleeRange : rangedRange;
+        if (dist > attackRange + 4f)
+        {
+            state = State.Chase;
+            agent.isStopped = false;
+            return;
+        }
+
+        if (canSee && Time.time >= nextAttackTime)
+        {
+            float interval = (enemyType == EnemyType.Melee)
+                ? (1f / Mathf.Max(0.01f, meleeAttackRate))
+                : (1f / Mathf.Max(0.01f, rangedAttackRate));
+            nextAttackTime = Time.time + interval;
+            DoAttack();
+        }
+
+        if (Time.time >= peekEndTime)
+        {
+            state = State.TakeCover;
+            agent.isStopped = false;
+        }
+    }
+
+    private bool TryEnterTacticalCover(bool canSee)
+    {
+        if (!useTactics) return false;
+        if (player == null) return false;
+        if (Time.time < nextCoverDecisionTime) return false;
+
+        nextCoverDecisionTime = Time.time + coverDecisionInterval;
+
+        if (!ShouldTakeCover(canSee)) return false;
+
+        CoverPoint bestCover = FindBestCover();
+        if (bestCover == null) return false;
+
+        currentCover = bestCover;
+        state = State.TakeCover;
+        nextCoverRepathTime = 0f;
+        return true;
+    }
+
+    private bool ShouldTakeCover(bool canSee)
+    {
+        if (!canSee) return false;
+
+        float hpRatio = 1f;
+        if (health != null && health.maxHealth > 0.01f)
+            hpRatio = health.currentHealth / health.maxHealth;
+
+        if (enemyType == EnemyType.Ranged)
+            return hpRatio <= lowHealthCoverRatio || state == State.Attack;
+
+        return hpRatio <= lowHealthCoverRatio * 0.7f;
+    }
+
+    private CoverPoint FindBestCover()
+    {
+        if (CoverPoint.All.Count == 0) return null;
+
+        float bestScore = float.MinValue;
+        CoverPoint best = null;
+
+        float preferredRange = (enemyType == EnemyType.Melee) ? meleeRange : rangedRange;
+
+        for (int i = 0; i < CoverPoint.All.Count; i++)
+        {
+            CoverPoint point = CoverPoint.All[i];
+            if (point == null) continue;
+
+            float toPoint = Vector3.Distance(transform.position, point.transform.position);
+            if (toPoint > coverSearchRadius) continue;
+
+            Vector3 stand = point.GetStandPosition(player.position);
+            if (!NavMesh.SamplePosition(stand, out NavMeshHit sampled, 2.0f, NavMesh.AllAreas))
+                continue;
+
+            stand = sampled.position;
+
+            Vector3 eye = stand + Vector3.up * 1.2f;
+            Vector3 playerEye = player.position + Vector3.up * 1.2f;
+            bool blocked = Physics.Linecast(eye, playerEye, obstacleMask, QueryTriggerInteraction.Ignore);
+            if (!blocked) continue;
+
+            float distToPlayer = Vector3.Distance(stand, player.position);
+            float rangeScore = 1f - Mathf.Clamp01(Mathf.Abs(distToPlayer - preferredRange) / Mathf.Max(preferredRange, 0.1f));
+
+            float score = 0f;
+            score += 60f;
+            score += rangeScore * 25f;
+            score -= toPoint * 1.2f;
+            score += Random.Range(0f, 3f);
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = point;
+            }
+        }
+
+        return best;
     }
 
     private void DoAttack()
@@ -220,7 +405,6 @@ public class EnemyAI : MonoBehaviour
         {
             if (projectilePrefab != null && firePoint != null)
             {
-                
             }
             else
             {
@@ -289,7 +473,7 @@ public class EnemyAI : MonoBehaviour
         Quaternion upright = Quaternion.Euler(0f, e.y, 0f);
         transform.rotation = Quaternion.Slerp(transform.rotation, upright, 1f - Mathf.Exp(-10f * Time.deltaTime));
 
-        if(modelRoot != null)
+        if (modelRoot != null)
         {
             Vector3 me = modelRoot.eulerAngles;
             Quaternion mu = Quaternion.Euler(0f, me.y, 0f);
@@ -317,12 +501,9 @@ public class EnemyAI : MonoBehaviour
 
         Vector3 e = rot.eulerAngles;
         rot = Quaternion.Euler(0f, e.y, 0f);
-        
+
         t.rotation = Quaternion.RotateTowards(t.rotation, rot, turnSpeed * Time.deltaTime);
     }
-
-    [Header("Debug Draw")]
-    public bool debugDrawVision = true;
 
     private void OnDrawGizmos()
     {

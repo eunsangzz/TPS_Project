@@ -458,6 +458,7 @@
 "Assets/Scripts/CoverCameraOffset.cs"
 "Assets/Scripts/CoverController.cs"
 "Assets/Scripts/CoverDetector.cs"
+"Assets/Scripts/CoverPoint.cs"
 "Assets/Scripts/EnemyAI.cs"
 "Assets/Scripts/EnemyHealth.cs"
 "Assets/Scripts/EnemyProjectile.cs"
