@@ -905,6 +905,53 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 421}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &870316444
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 870316445}
+  - component: {fileID: 870316446}
+  m_Layer: 7
+  m_Name: Cover (2)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &870316445
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 870316444}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: 0, y: 0, z: -0.5089}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 881755319}
+  m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
+--- !u!114 &870316446
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 870316444}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e95ca413311f424fb2d5ac5974fcfba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CoverPoint
+  useTransformForwardAsNormal: 1
+  manualNormal: {x: 0, y: 0, z: 1}
+  standOffset: 0.7
 --- !u!1 &881755315
 GameObject:
   m_ObjectHideFlags: 0
@@ -1014,7 +1061,10 @@ Transform:
   m_LocalPosition: {x: 58.31, y: 2.95, z: 49.9543}
   m_LocalScale: {x: 2.8516, y: 8.084757, z: 13.300972}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 1031815786}
+  - {fileID: 1175271934}
+  - {fileID: 870316445}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &931135296
@@ -1261,6 +1311,53 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 995887740}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &1031815785
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1031815786}
+  - component: {fileID: 1031815787}
+  m_Layer: 7
+  m_Name: Cover
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1031815786
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1031815785}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: 0, y: 0, z: 0.416}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 881755319}
+  m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
+--- !u!114 &1031815787
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1031815785}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e95ca413311f424fb2d5ac5974fcfba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CoverPoint
+  useTransformForwardAsNormal: 1
+  manualNormal: {x: 0, y: 0, z: 1}
+  standOffset: 0.7
 --- !u!1 &1035182270
 GameObject:
   m_ObjectHideFlags: 0
@@ -1668,6 +1765,53 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 7673487251499544598, guid: c98043d57e0190845b790d7b92990bee, type: 3}
   m_PrefabInstance: {fileID: 1446234076}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1175271933
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1175271934}
+  - component: {fileID: 1175271935}
+  m_Layer: 7
+  m_Name: Cover (1)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1175271934
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1175271933}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
+  m_LocalPosition: {x: 0, y: 0, z: -0.0872}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 881755319}
+  m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
+--- !u!114 &1175271935
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1175271933}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e95ca413311f424fb2d5ac5974fcfba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CoverPoint
+  useTransformForwardAsNormal: 1
+  manualNormal: {x: 0, y: 0, z: 1}
+  standOffset: 0.7
 --- !u!1001 &1214064501
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1840,6 +1984,13 @@ MonoBehaviour:
   projectileSpeed: 25
   turnSpeed: 50
   modelRoot: {fileID: 0}
+  useTactics: 1
+  coverSearchRadius: 22
+  coverDecisionInterval: 1
+  coverArriveDistance: 1
+  peekDuration: 1.3
+  lowHealthCoverRatio: 0.55
+  coverRepathInterval: 0.3
   debugDrawVision: 1
 --- !u!4 &1214064507 stripped
 Transform:
@@ -2035,6 +2186,13 @@ MonoBehaviour:
   projectileSpeed: 25
   turnSpeed: 50
   modelRoot: {fileID: 1226727016}
+  useTactics: 1
+  coverSearchRadius: 22
+  coverDecisionInterval: 1
+  coverArriveDistance: 1
+  peekDuration: 1.3
+  lowHealthCoverRatio: 0.55
+  coverRepathInterval: 0.3
   debugDrawVision: 1
 --- !u!4 &1226727016 stripped
 Transform:
@@ -2824,6 +2982,13 @@ MonoBehaviour:
   projectileSpeed: 25
   turnSpeed: 50
   modelRoot: {fileID: 1631377702}
+  useTactics: 1
+  coverSearchRadius: 22
+  coverDecisionInterval: 1
+  coverArriveDistance: 1
+  peekDuration: 1.3
+  lowHealthCoverRatio: 0.55
+  coverRepathInterval: 0.3
   debugDrawVision: 1
 --- !u!195 &1631377701
 NavMeshAgent:
