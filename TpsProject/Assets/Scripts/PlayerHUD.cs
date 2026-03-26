@@ -19,13 +19,13 @@ public class PlayerHUD : MonoBehaviour
     private int lastMag = -1;
     private int lastRes = -1;
     private bool lastReload = false;
-    private ThirdPersonShooter.FireMode lastMode;
+    private WeaponData.FireMode lastMode;
 
     private void Awake()
     {
         if (playerHealth == null || shooter == null)
         {
-            Debug.LogError("[PlayerHUD] playerHealth/shooter¸¦ ÀÎ½ºÆåÅÍ¿¡ ¿¬°áÇØÁà!");
+            Debug.LogError("[PlayerHUD] playerHealth/shooterï¿½ï¿½ ï¿½Î½ï¿½ï¿½ï¿½ï¿½Í¿ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½!");
             enabled = false;
             return;
         }
@@ -99,6 +99,6 @@ public class PlayerHUD : MonoBehaviour
     {
         if (modeText == null) return;
 
-        modeText.text = shooter.CurrentFireMode == ThirdPersonShooter.FireMode.Auto ? "AUTO" : "SINGLE";
+        modeText.text = shooter.CurrentFireMode == WeaponData.FireMode.Auto ? "AUTO" : "SINGLE";
     }
 }
