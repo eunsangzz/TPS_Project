@@ -5,6 +5,7 @@ public class EnemyCombat : MonoBehaviour
     [Header("References")]
     public Transform self;
     public Transform player;
+    public Transform firePoint;
 
     [Header("Type")]
     public EnemyType enemyType = EnemyType.Melee;
@@ -19,16 +20,42 @@ public class EnemyCombat : MonoBehaviour
     public float rangedDamage = 12f;
     public float rangedAttackRate = 0.6f;
 
-    [Header("Projectile")]
-    public GameObject projectilePrefab;
-    public Transform firePoint;
-    public float projectileSpeed = 25f;
+    [Header("Ranged Timing")]
+    public float attackWindup = 0.25f;
+
+    [Header("Ranged Accuracy / Spread")]
+    [Range(0f, 1f)] public float accuracy = 0.85f;
+    public float spreadAngle = 2.0f;
+    public int pelletCount = 1;
+    public float aimHeight = 1.2f;
+
+    [Header("Raycast")]
+    public LayerMask hitMask = ~0;
+    public QueryTriggerInteraction triggerInteraction = QueryTriggerInteraction.Ignore;
+
+    [Header("Debug")]
+    public bool drawShotRay = true;
+    public float debugRayTime = 0.15f;
 
     private float nextAttackTime;
+    private bool rangedAttackPending;
+    private float pendingFireTime;
 
     private void Awake()
     {
         if (self == null) self = transform;
+    }
+
+    private void Update()
+    {
+        if (enemyType != EnemyType.Ranged) return;
+        if (!rangedAttackPending) return;
+
+        if (Time.time >= pendingFireTime)
+        {
+            rangedAttackPending = false;
+            FireRangedHitscan();
+        }
     }
 
     public float GetAttackRange()
@@ -44,7 +71,10 @@ public class EnemyCombat : MonoBehaviour
 
     public bool CanAttackNow()
     {
-        return Time.time >= nextAttackTime;
+        if (enemyType == EnemyType.Melee)
+            return Time.time >= nextAttackTime;
+
+        return Time.time >= nextAttackTime && !rangedAttackPending;
     }
 
     public void MarkAttackUsed()
@@ -52,34 +82,128 @@ public class EnemyCombat : MonoBehaviour
         nextAttackTime = Time.time + GetAttackInterval();
     }
 
+    public void CancelPendingAttack()
+    {
+        rangedAttackPending = false;
+    }
+
+    public bool IsAttackPending()
+    {
+        return rangedAttackPending;
+    }
+
     public void TryAttack()
     {
         if (player == null) return;
 
-        if(enemyType == EnemyType.Melee)
+        if (enemyType == EnemyType.Melee)
         {
-            if(Vector3.Distance(self.position, player.position) <= meleeRange + 0.1f)
-            {
-                player.GetComponent<PlayerHealth>()?.TakeDamage(meleeDamage);
-            }
+            TryMeleeAttack();
         }
         else
         {
-            if (projectilePrefab != null && firePoint != null)
-            {
-                GameObject bullet = Instantiate(projectilePrefab, firePoint.position, firePoint.rotation);
+            StartRangedAttack();
+        }
+    }
 
-                Rigidbody rb = bullet.GetComponent<Rigidbody>();
-                if(rb != null)
+    private void TryMeleeAttack()
+    {
+        if (Vector3.Distance(self.position, player.position) <= meleeRange + 0.1f)
+        {
+            IDamageable damageable = player.GetComponentInParent<IDamageable>();
+            if (damageable != null)
+            {
+                Vector3 hitPoint = player.position;
+                Vector3 hitDirection = (player.position - self.position).normalized;
+                damageable.TakeDamage(meleeDamage, hitPoint, hitDirection);
+            }
+        }
+    }
+
+    private void StartRangedAttack()
+    {
+        if (rangedAttackPending) return;
+
+        rangedAttackPending = true;
+        pendingFireTime = Time.time + attackWindup;
+    }
+
+    private void FireRangedHitscan()
+    {
+        if (player == null) return;
+
+        Vector3 fallbackOrigin = self.position + Vector3.up * 1.2f;
+        Vector3 origin = firePoint != null ? firePoint.position : fallbackOrigin;
+        Vector3 targetPoint = player.position + Vector3.up * aimHeight;
+
+        int shots = Mathf.Max(1, pelletCount);
+
+        for (int i = 0; i < shots; i++)
+        {
+            Vector3 dir = (targetPoint - origin).normalized;
+
+            bool isAccurateShot = Random.value <= accuracy;
+
+            float appliedSpread = isAccurateShot ? spreadAngle * 0.35f : spreadAngle;
+            dir = ApplySpread(dir, appliedSpread);
+
+            RaycastHit[] hits = Physics.RaycastAll(origin, dir, rangedRange, hitMask, triggerInteraction);
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+            RaycastHit? validHit = null;
+            for (int hitIndex = 0; hitIndex < hits.Length; hitIndex++)
+            {
+                if (IsSelfTransform(hits[hitIndex].transform))
+                    continue;
+
+                validHit = hits[hitIndex];
+                break;
+            }
+
+            if (validHit.HasValue)
+            {
+                RaycastHit hit = validHit.Value;
+
+                if (drawShotRay)
+                    Debug.DrawLine(origin, hit.point, Color.red, debugRayTime);
+
+                IDamageable damageable = hit.collider.GetComponentInParent<IDamageable>();
+                if (damageable != null)
                 {
-                    Vector3 dir = (player.position + Vector3.up * 1.2f - firePoint.position).normalized;
-                    rb.linearVelocity = dir * projectileSpeed;
+                    damageable.TakeDamage(rangedDamage, hit.point, dir);
                 }
             }
             else
             {
-                player.GetComponent<PlayerHealth>()?.TakeDamage(rangedDamage);
+                if (drawShotRay)
+                    Debug.DrawLine(origin, origin + dir * rangedRange, Color.yellow, debugRayTime);
             }
         }
+    }
+
+
+    private Vector3 ApplySpread(Vector3 baseDir, float angleDeg)
+    {
+        if (angleDeg <= 0.001f) return baseDir;
+
+        Quaternion yaw = Quaternion.AngleAxis(Random.Range(-angleDeg, angleDeg), Vector3.up);
+
+
+        Vector3 rightAxis = Vector3.Cross(Vector3.up, baseDir).normalized;
+        if(rightAxis.sqrMagnitude < 0.0001f)
+        {
+            rightAxis = Vector3.right;
+        }
+
+        Quaternion pitch = Quaternion.AngleAxis(Random.Range(-angleDeg, angleDeg), rightAxis);
+
+        Vector3 finalDir = pitch * yaw * baseDir;
+        return finalDir.normalized;
+    }
+
+    private bool IsSelfTransform(Transform hitTransform)
+    {
+        if (hitTransform == null || self == null) return false;
+        return hitTransform == self || hitTransform.IsChildOf(self);
     }
 }

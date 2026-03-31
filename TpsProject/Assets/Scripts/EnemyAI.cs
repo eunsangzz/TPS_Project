@@ -131,18 +131,27 @@ public class EnemyAI : MonoBehaviour
 
     private void SetupSharedReferences()
     {
-        perception.player = player;
-        perception.head = head;
-        perception.self = transform;
+        if (perception != null)
+        {
+            perception.player = player;
+            perception.head = head;
+            perception.self = transform;
+        }
 
-        combat.player = player;
-        combat.self = transform;
-        combat.enemyType = enemyType;
+        if (combat != null)
+        {
+            combat.player = player;
+            combat.self = transform;
+            combat.enemyType = enemyType;
+        }
 
-        tactics.player = player;
-        tactics.self = transform;
-        tactics.health = health;
-        tactics.enemyType = enemyType;
+        if (tactics != null)
+        {
+            tactics.player = player;
+            tactics.self = transform;
+            tactics.health = health;
+            tactics.enemyType = enemyType;
+        }
     }
 
     private void ApplyTypeState()
@@ -160,6 +169,14 @@ public class EnemyAI : MonoBehaviour
     private void ChangeState(State next)
     {
         if (state == next) return;
+
+        bool leavingAttackState = state == State.Attack || state == State.PeekShoot;
+        bool enteringAttackState = next == State.Attack || next == State.PeekShoot;
+
+        if (leavingAttackState && !enteringAttackState)
+        {
+            combat.CancelPendingAttack();
+        }
 
         state = next;
 

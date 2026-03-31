@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class PlayerHealth : MonoBehaviour//, IDamageable
+public class PlayerHealth : MonoBehaviour, IDamageable
 {
     [Header("Health")]
     [SerializeField] private float maxHealth = 100f;
@@ -34,6 +34,11 @@ public class PlayerHealth : MonoBehaviour//, IDamageable
             animator.SetTrigger(hitTrigger);
 
         if (CurrentHealth <= 0f) Die();
+    }
+
+    public void TakeDamage(float amount, Vector3 hitPoint, Vector3 hitDirection)
+    {
+        TakeDamage(amount);
     }
 
     private void Die()

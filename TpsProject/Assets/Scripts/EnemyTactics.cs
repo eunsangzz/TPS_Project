@@ -44,7 +44,7 @@ public class EnemyTactics : MonoBehaviour
         
         if(enemyType == EnemyType.Ranged)
         {
-            return hpRatio <= lowHealthCoverRatio || isInAttackState;
+            return hpRatio <= lowHealthCoverRatio;
         }
 
         return hpRatio <= lowHealthCoverRatio * 0.7f;
