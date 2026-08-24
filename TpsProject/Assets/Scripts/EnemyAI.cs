@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.AI;
+using System.Collections.Generic;
 
 public enum EnemyType { Melee, Ranged }
 
@@ -29,15 +30,34 @@ public class EnemyAI : MonoBehaviour
 
     [Header("Patrol")]
     public PatrolArea[] patrolAreas;
+    [SerializeField] private float patrolAreaEdgeInset = 0.18f;
+    [SerializeField] private float fallbackPatrolRadius = 14f;
+    [SerializeField] private float patrolNavMeshSampleRadius = 5f;
 
     [Header("Chase")]
     public float loseSightTime = 2f;
     public float repathInterval = 0.2f;
+    [SerializeField] private float chaseAfterDamageDuration = 2f;
+    [SerializeField] private float chaseAfterDamageRange = 35f;
 
     [Header("Movement")]
-    public float meleeMoveSpeed = 4.5f;
-    public float rangedMoveSpeed = 2.8f;
+    public float meleeMoveSpeed = 3.6f;
+    public float rangedMoveSpeed = 2.2f;
     public float turnSpeed = 10f;
+
+    [Header("Animator")]
+    [SerializeField] private Animator animator;
+    [SerializeField] private string moveSpeedParam = "MoveSpeed";
+    [SerializeField] private string isAimParam = "IsAim";
+    [SerializeField] private string isGroundedParam = "IsGrounded";
+    [SerializeField] private string isSprintParam = "IsSprint";
+    [SerializeField] private string attackTrigger = "FireSingle";
+    [SerializeField] private float animatorSpeedDampTime = 0.12f;
+
+    [Header("Ranged Evasion")]
+    public float rangedEvasionInterval = 0.85f;
+    public float rangedEvasionSideStep = 3f;
+    public float rangedPreferredDistance = 14f;
 
     [Header("Cover")]
     public float coverArriveDistance = 1.0f;
@@ -51,18 +71,25 @@ public class EnemyAI : MonoBehaviour
     private EnemyPerception perception;
     private EnemyCombat combat;
     private EnemyTactics tactics;
+    private readonly Dictionary<string, AnimatorControllerParameterType> animatorParams = new Dictionary<string, AnimatorControllerParameterType>();
 
     private State state = State.Patrol;
     private CoverPoint currentCover;
 
     private float lastSeenTime = -999f;
     private float nextRepathTime;
+    private float damageChaseEndTime = -999f;
     private float nextCoverRepathTime;
     private float peekEndTime;
     private float nextPatrolPickTime;
+    private float nextRangedEvasionTime;
+    private int rangedEvasionSide = 1;
 
     private Vector3 patrolTarget;
     private Vector3 smoothDir;
+
+    public bool HasDetectedPlayer => lastSeenTime > -900f && Time.time <= lastSeenTime + loseSightTime;
+    public bool CanCurrentlySeePlayer { get; private set; }
 
     private void Awake()
     {
@@ -70,14 +97,23 @@ public class EnemyAI : MonoBehaviour
         perception = GetComponent<EnemyPerception>();
         combat = GetComponent<EnemyCombat>();
         tactics = GetComponent<EnemyTactics>();
+        if (animator == null) animator = GetComponentInChildren<Animator>();
 
         if (health == null) health = GetComponent<EnemyHealth>();
         if (head == null) head = transform;
 
         agent.updateRotation = false;
 
+        CacheAnimatorParameters();
         SetupSharedReferences();
+        SubscribeHealthEvents();
         ApplyTypeState();
+    }
+
+    private void OnDestroy()
+    {
+        if (health != null)
+            health.Damaged -= HandleDamaged;
     }
 
     private void Start()
@@ -89,15 +125,26 @@ public class EnemyAI : MonoBehaviour
         }
 
         SetupSharedReferences();
+        ResolvePatrolAreas();
         PickNewPatrolTarget(true);
     }
 
     private void Update()
     {
         if (health != null && health.IsDead) return;
-        if (player == null) return;
 
-        bool canSee = perception.CanSeePlayer(enemyType == EnemyType.Ranged);
+        if (player == null)
+        {
+            GameObject p = GameObject.FindGameObjectWithTag("Player");
+            if (p != null)
+            {
+                player = p.transform;
+                SetupSharedReferences();
+            }
+        }
+
+        bool canSee = player != null && perception.CanSeePlayer(enemyType == EnemyType.Ranged);
+        CanCurrentlySeePlayer = canSee;
         if (canSee) lastSeenTime = Time.time;
 
         switch (state)
@@ -126,6 +173,7 @@ public class EnemyAI : MonoBehaviour
                 break;
         }
 
+        UpdateAnimator(canSee);
         KeepUpright();
     }
 
@@ -192,6 +240,12 @@ public class EnemyAI : MonoBehaviour
             return;
         }
 
+        if (!agent.hasPath || agent.pathStatus == NavMeshPathStatus.PathInvalid)
+        {
+            PickNewPatrolTarget(true);
+            return;
+        }
+
         if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance + 0.1f)
         {
             if (Time.time >= nextPatrolPickTime)
@@ -205,11 +259,18 @@ public class EnemyAI : MonoBehaviour
     {
         if (TryStartTakeCover(canSee)) return;
 
-        if (!canSee && Time.time > lastSeenTime + loseSightTime)
+        if (IsDamageChaseActive() && !canSee)
         {
-            ChangeState(State.Patrol);
-            currentCover = null;
-            PickNewPatrolTarget(true);
+            float damageChaseDistance = perception.DistanceToPlayer();
+            if (damageChaseDistance > chaseAfterDamageRange || Time.time > damageChaseEndTime)
+            {
+                StopChasingAndPatrol();
+                return;
+            }
+        }
+        else if (!canSee && Time.time > lastSeenTime + loseSightTime)
+        {
+            StopChasingAndPatrol();
             return;
         }
 
@@ -224,7 +285,7 @@ public class EnemyAI : MonoBehaviour
 
         if (dist <= combat.GetAttackRange())
         {
-            agent.isStopped = true;
+            agent.isStopped = enemyType != EnemyType.Ranged;
             ChangeState(State.Attack);
         }
     }
@@ -252,10 +313,48 @@ public class EnemyAI : MonoBehaviour
 
         FaceTarget(player.position);
 
+        if (enemyType == EnemyType.Ranged)
+        {
+            UpdateRangedEvasion(dist);
+        }
+        else
+        {
+            agent.isStopped = true;
+        }
+
         if(combat.CanAttackNow())
         {
             combat.MarkAttackUsed();
+            TriggerAttackAnimation();
             combat.TryAttack();
+        }
+    }
+
+    private void UpdateRangedEvasion(float dist)
+    {
+        if (Time.time < nextRangedEvasionTime) return;
+
+        nextRangedEvasionTime = Time.time + rangedEvasionInterval;
+        rangedEvasionSide *= -1;
+
+        Vector3 awayFromPlayer = transform.position - player.position;
+        awayFromPlayer.y = 0f;
+        if (awayFromPlayer.sqrMagnitude < 0.0001f) awayFromPlayer = -transform.forward;
+        awayFromPlayer.Normalize();
+
+        Vector3 side = Vector3.Cross(Vector3.up, awayFromPlayer).normalized * rangedEvasionSide;
+        Vector3 distanceAdjust = Vector3.zero;
+
+        if (dist < rangedPreferredDistance - 2f)
+            distanceAdjust = awayFromPlayer * 2.5f;
+        else if (dist > rangedPreferredDistance + 3f)
+            distanceAdjust = -awayFromPlayer * 1.5f;
+
+        Vector3 desired = transform.position + side * rangedEvasionSideStep + distanceAdjust;
+        if (NavMesh.SamplePosition(desired, out NavMeshHit hit, 4f, NavMesh.AllAreas))
+        {
+            agent.isStopped = false;
+            agent.SetDestination(hit.position);
         }
     }
 
@@ -323,6 +422,7 @@ public class EnemyAI : MonoBehaviour
         if (canSee && combat.CanAttackNow())
         {
             combat.MarkAttackUsed();
+            TriggerAttackAnimation();
             combat.TryAttack();
         }
 
@@ -347,22 +447,124 @@ public class EnemyAI : MonoBehaviour
         return true;
     }
 
+    private void SubscribeHealthEvents()
+    {
+        if (health == null) return;
+
+        health.Damaged -= HandleDamaged;
+        health.Damaged += HandleDamaged;
+    }
+
+    private void HandleDamaged(EnemyHealth damagedEnemy, Vector3 hitPoint, Vector3 hitDirection)
+    {
+        if (health != damagedEnemy) return;
+
+        if (player == null)
+        {
+            GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
+            if (playerObject != null)
+            {
+                player = playerObject.transform;
+                SetupSharedReferences();
+            }
+        }
+
+        if (player == null) return;
+        if (Vector3.Distance(transform.position, player.position) > chaseAfterDamageRange) return;
+
+        damageChaseEndTime = Time.time + chaseAfterDamageDuration;
+        lastSeenTime = Time.time;
+        currentCover = null;
+        nextRepathTime = 0f;
+        agent.isStopped = false;
+        ChangeState(State.Chase);
+    }
+
+    private bool IsDamageChaseActive()
+    {
+        return Time.time <= damageChaseEndTime;
+    }
+
+    private void StopChasingAndPatrol()
+    {
+        damageChaseEndTime = -999f;
+        currentCover = null;
+        ChangeState(State.Patrol);
+        PickNewPatrolTarget(true);
+    }
+
     private void PickNewPatrolTarget(bool immediate)
     {
-        if (patrolAreas == null || patrolAreas.Length == 0) return;
+        ResolvePatrolAreas();
 
-        PatrolArea area = patrolAreas[Random.Range(0, patrolAreas.Length)];
-        Vector3 candidate = area.GetRandomPoint();
+        if (!TryPickPatrolAreaPoint(out Vector3 target) &&
+            !TryPickNearbyNavMeshPoint(out target))
+        {
+            nextPatrolPickTime = Time.time + 1f;
+            return;
+        }
 
-        if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 5f, NavMesh.AllAreas))
-            patrolTarget = hit.position;
-        else
-            patrolTarget = transform.position;
+        patrolTarget = target;
 
         agent.isStopped = false;
-        agent.SetDestination(patrolTarget);
+        if (!agent.SetDestination(patrolTarget))
+        {
+            nextPatrolPickTime = Time.time + 1f;
+            return;
+        }
 
         nextPatrolPickTime = immediate ? Time.time : Time.time + Random.Range(2f, 5f);
+    }
+
+    private void ResolvePatrolAreas()
+    {
+        if (patrolAreas != null && patrolAreas.Length > 0) return;
+
+        patrolAreas = FindObjectsByType<PatrolArea>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+    }
+
+    private bool TryPickPatrolAreaPoint(out Vector3 point)
+    {
+        point = transform.position;
+        if (patrolAreas == null || patrolAreas.Length == 0) return false;
+
+        for (int i = 0; i < 24; i++)
+        {
+            PatrolArea area = patrolAreas[Random.Range(0, patrolAreas.Length)];
+            if (area == null) continue;
+            if (!area.TryGetRandomNavMeshPoint(patrolAreaEdgeInset, patrolNavMeshSampleRadius, out Vector3 candidate)) continue;
+            if (!HasCompletePath(candidate)) continue;
+
+            point = candidate;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryPickNearbyNavMeshPoint(out Vector3 point)
+    {
+        for (int i = 0; i < 24; i++)
+        {
+            Vector2 random = Random.insideUnitCircle.normalized * Random.Range(fallbackPatrolRadius * 0.35f, fallbackPatrolRadius);
+            Vector3 candidate = transform.position + new Vector3(random.x, 0f, random.y);
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, patrolNavMeshSampleRadius, NavMesh.AllAreas)) continue;
+            if (!HasCompletePath(hit.position)) continue;
+
+            point = hit.position;
+            return true;
+        }
+
+        point = transform.position;
+        return false;
+    }
+
+    private bool HasCompletePath(Vector3 destination)
+    {
+        if (agent == null || !agent.enabled || !agent.isOnNavMesh) return false;
+
+        NavMeshPath path = new NavMeshPath();
+        return agent.CalculatePath(destination, path) && path.status == NavMeshPathStatus.PathComplete;
     }
 
     private void FaceTarget(Vector3 targetPos)
@@ -387,6 +589,65 @@ public class EnemyAI : MonoBehaviour
             Quaternion mu = Quaternion.Euler(0f, me.y, 0f);
             modelRoot.rotation = Quaternion.Slerp(modelRoot.rotation, mu, 1f - Mathf.Exp(-10f * Time.deltaTime));
         }
+    }
+
+    private void CacheAnimatorParameters()
+    {
+        animatorParams.Clear();
+        if (animator == null) return;
+
+        foreach (AnimatorControllerParameter param in animator.parameters)
+        {
+            if (!animatorParams.ContainsKey(param.name))
+                animatorParams.Add(param.name, param.type);
+        }
+    }
+
+    private void UpdateAnimator(bool canSee)
+    {
+        if (animator == null || agent == null) return;
+
+        float maxSpeed = Mathf.Max(agent.speed, 0.01f);
+        float speed01 = agent.isStopped ? 0f : Mathf.Clamp01(agent.velocity.magnitude / maxSpeed);
+        bool isMoving = speed01 > 0.05f;
+        bool isAiming = canSee || state == State.Attack || state == State.PeekShoot;
+
+        SetAnimatorFloat(moveSpeedParam, speed01);
+        SetAnimatorBool(isGroundedParam, true);
+        SetAnimatorBool(isSprintParam, isMoving && enemyType == EnemyType.Melee);
+        SetAnimatorBool(isAimParam, isAiming);
+    }
+
+    private void TriggerAttackAnimation()
+    {
+        if (animator == null) return;
+
+        if (HasAnimatorParam(attackTrigger, AnimatorControllerParameterType.Trigger))
+        {
+            animator.SetTrigger(attackTrigger);
+        }
+        else if (HasAnimatorParam("Fire", AnimatorControllerParameterType.Trigger))
+        {
+            animator.SetTrigger("Fire");
+        }
+    }
+
+    private void SetAnimatorFloat(string paramName, float value)
+    {
+        if (HasAnimatorParam(paramName, AnimatorControllerParameterType.Float))
+            animator.SetFloat(paramName, value, animatorSpeedDampTime, Time.deltaTime);
+    }
+
+    private void SetAnimatorBool(string paramName, bool value)
+    {
+        if (HasAnimatorParam(paramName, AnimatorControllerParameterType.Bool))
+            animator.SetBool(paramName, value);
+    }
+
+    private bool HasAnimatorParam(string paramName, AnimatorControllerParameterType type)
+    {
+        if (string.IsNullOrEmpty(paramName)) return false;
+        return animatorParams.TryGetValue(paramName, out AnimatorControllerParameterType foundType) && foundType == type;
     }
 
     private void FaceMoveDirection()

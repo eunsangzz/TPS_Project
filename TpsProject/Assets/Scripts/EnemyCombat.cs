@@ -24,10 +24,11 @@ public class EnemyCombat : MonoBehaviour
     public float attackWindup = 0.25f;
 
     [Header("Ranged Accuracy / Spread")]
-    [Range(0f, 1f)] public float accuracy = 0.85f;
-    public float spreadAngle = 2.0f;
+    [Range(0f, 1f)] public float accuracy = 0.5f;
+    public float spreadAngle = 18.0f;
     public int pelletCount = 1;
     public float aimHeight = 1.2f;
+    public float guaranteedMissRadius = 1.6f;
 
     [Header("Raycast")]
     public LayerMask hitMask = ~0;
@@ -140,35 +141,30 @@ public class EnemyCombat : MonoBehaviour
 
         for (int i = 0; i < shots; i++)
         {
-            Vector3 dir = (targetPoint - origin).normalized;
-
             bool isAccurateShot = Random.value <= accuracy;
+            Vector3 aimPoint = isAccurateShot ? targetPoint : GetMissAimPoint(targetPoint, origin);
+            Vector3 dir = (aimPoint - origin).normalized;
 
-            float appliedSpread = isAccurateShot ? spreadAngle * 0.35f : spreadAngle;
-            dir = ApplySpread(dir, appliedSpread);
-
-            RaycastHit[] hits = Physics.RaycastAll(origin, dir, rangedRange, hitMask, triggerInteraction);
-            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-
-            RaycastHit? validHit = null;
-            for (int hitIndex = 0; hitIndex < hits.Length; hitIndex++)
+            if (isAccurateShot)
             {
-                if (IsSelfTransform(hits[hitIndex].transform))
-                    continue;
-
-                validHit = hits[hitIndex];
-                break;
+                dir = ApplySpread(dir, spreadAngle * 0.1f);
             }
 
-            if (validHit.HasValue)
-            {
-                RaycastHit hit = validHit.Value;
+            Ray ray = new Ray(origin, dir);
+            bool hitSomething = Physics.Raycast(ray, out RaycastHit hit, rangedRange, hitMask, triggerInteraction);
 
+            if (hitSomething && IsSelfTransform(hit.transform))
+            {
+                hitSomething = false;
+            }
+
+            if (hitSomething)
+            {
                 if (drawShotRay)
                     Debug.DrawLine(origin, hit.point, Color.red, debugRayTime);
 
                 IDamageable damageable = hit.collider.GetComponentInParent<IDamageable>();
-                if (damageable != null)
+                if (isAccurateShot && damageable != null)
                 {
                     damageable.TakeDamage(rangedDamage, hit.point, dir);
                 }
@@ -181,6 +177,16 @@ public class EnemyCombat : MonoBehaviour
         }
     }
 
+    private Vector3 GetMissAimPoint(Vector3 targetPoint, Vector3 origin)
+    {
+        Vector3 toTarget = (targetPoint - origin).normalized;
+        Vector3 right = Vector3.Cross(Vector3.up, toTarget).normalized;
+        if (right.sqrMagnitude < 0.0001f) right = self != null ? self.right : Vector3.right;
+
+        Vector3 up = Vector3.Cross(toTarget, right).normalized;
+        Vector2 missOffset = Random.insideUnitCircle.normalized * guaranteedMissRadius;
+        return targetPoint + right * missOffset.x + up * missOffset.y;
+    }
 
     private Vector3 ApplySpread(Vector3 baseDir, float angleDeg)
     {

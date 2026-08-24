@@ -6,18 +6,21 @@ public class WeaponRuntime
     [SerializeField] private WeaponData.FireMode currentFireMode;
     [SerializeField] private int ammoInMag;
     [SerializeField] private int reserveAmmo;
+    [SerializeField] private bool infiniteReserveAmmo;
     [SerializeField] private bool isReloading;
     [SerializeField] private float nextFireTime;
 
     public WeaponData.FireMode CurrentFireMode => currentFireMode;
     public int AmmoInMag => ammoInMag;
     public int ReserveAmmo => reserveAmmo;
+    public bool InfiniteReserveAmmo => infiniteReserveAmmo;
     public bool IsReloading => isReloading;
 
-    public void Initialize(WeaponData data, int startReserverAmmo)
+    public void Initialize(WeaponData data, int startReserverAmmo, bool useInfiniteReserveAmmo)
     {
         currentFireMode = data.fireMode;
         ammoInMag = Mathf.Clamp(data.magazineSize, 1, 999);
+        infiniteReserveAmmo = useInfiniteReserveAmmo;
         reserveAmmo = Mathf.Max(0, startReserverAmmo);
         isReloading = false;
         nextFireTime = 0f;
@@ -49,7 +52,7 @@ public class WeaponRuntime
     {
         if (isReloading) return false;
         if (ammoInMag >= data.magazineSize) return false;
-        if (reserveAmmo <= 0) return false;
+        if (!infiniteReserveAmmo && reserveAmmo <= 0) return false;
         return true;
     }
 
@@ -61,10 +64,11 @@ public class WeaponRuntime
     public void FinishReload(WeaponData data)
     {
         int need = data.magazineSize - ammoInMag;
-        int take = Mathf.Min(need, reserveAmmo);
+        int take = infiniteReserveAmmo ? need : Mathf.Min(need, reserveAmmo);
 
         ammoInMag += take;
-        reserveAmmo -= take;
+        if (!infiniteReserveAmmo)
+            reserveAmmo -= take;
         isReloading = false;
     }
 

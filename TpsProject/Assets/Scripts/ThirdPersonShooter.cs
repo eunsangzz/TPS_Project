@@ -28,6 +28,7 @@ public class ThirdPersonShooter : MonoBehaviour
 
     public int AmmoInMag => runtime.AmmoInMag;
     public int ReserveAmmo => runtime.ReserveAmmo;
+    public bool InfiniteReserveAmmo => runtime.InfiniteReserveAmmo;
     public bool IsReloading => runtime.IsReloading;
     public WeaponData.FireMode CurrentFireMode => runtime.CurrentFireMode;
 
@@ -46,7 +47,7 @@ public class ThirdPersonShooter : MonoBehaviour
             return;
         }
 
-        runtime.Initialize(weaponData, startReserveAmmo);
+        runtime.Initialize(weaponData, startReserveAmmo, true);
         PushAnimatorState();
     }
 

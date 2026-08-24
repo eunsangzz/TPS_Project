@@ -3,7 +3,7 @@ using UnityEngine.InputSystem;
 
 public class ThirdPersonCamera : MonoBehaviour
 {
-    //Ä«¸Þ¶ó ½ÃÁ¡
+    //Ä«ï¿½Þ¶ï¿½ ï¿½ï¿½ï¿½ï¿½
     [Header("Look")]
     [SerializeField] private float mouseSensitivity = 0.05f;
     [SerializeField] private float pitchMin = -35f;
@@ -12,17 +12,18 @@ public class ThirdPersonCamera : MonoBehaviour
     [Header("Follow")]
     [SerializeField] private float followHeight = 2.1f;
 
-    //Ä«¸Þ¶ó ÀÌµ¿½Ã Ãæµ¹ ¹æÁö
+    //Ä«ï¿½Þ¶ï¿½ ï¿½Ìµï¿½ï¿½ï¿½ ï¿½æµ¹ ï¿½ï¿½ï¿½ï¿½
     [Header("Distance")]
     [SerializeField] private float defaultDistance = 3.0f;
     [SerializeField] private float minDistance = 0.5f;
-    [SerializeField] private float collisionRadius = 0.25f; //¹ÝÁö¸§
-    [SerializeField] private float distanceSmooth = 12f; //°Å¸® º¸Á¤½Ã ¿¬¼Ó¼º
+    [SerializeField] private float collisionRadius = 0.25f; //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+    [SerializeField] private float distanceSmooth = 12f; //ï¿½Å¸ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ó¼ï¿½
     [SerializeField] private LayerMask collisionMask;
 
     [Header("Target")]
     [SerializeField] private Transform target;
     [SerializeField] private ThirdPersonInput inputSource;
+    [SerializeField] private bool autoFindPlayer = true;
 
     [Header("Offset")]
     [SerializeField] private Vector3 normalOffset = new Vector3(0f, 0f, 0f);
@@ -32,9 +33,9 @@ public class ThirdPersonCamera : MonoBehaviour
     private enum AimState { Hip, Shoulder, Scope }
 
     [Header("Aim/Scope")]
-    [SerializeField] private float scopeDoubleClickWindow = 0.25f; // ¿ìÅ¬¸¯ ´õºíÅ¬¸¯ ÆÇÁ¤ ½Ã°£
-    [SerializeField] private float zoomMultiplier = 4f;            // 4¹è ÁÜ
-    [SerializeField] private float zoomSmooth = 12f;               // ÁÜ ÀüÈ¯ ¼Óµµ
+    [SerializeField] private float scopeDoubleClickWindow = 0.25f; // ï¿½ï¿½Å¬ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Å¬ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ã°ï¿½
+    [SerializeField] private float zoomMultiplier = 4f;            // 4ï¿½ï¿½ ï¿½ï¿½
+    [SerializeField] private float zoomSmooth = 12f;               // ï¿½ï¿½ ï¿½ï¿½È¯ ï¿½Óµï¿½
 
     [Header("Aim Sens")]
     [SerializeField, Range(0.05f, 1f)] private float scopedSensitivityMultiplier = 0.35f;
@@ -90,10 +91,14 @@ public class ThirdPersonCamera : MonoBehaviour
             defaultFov = camComponent.fieldOfView;
             targetFov = defaultFov;
         }
+
+        ResolveReferences();
     }
 
     private void Start()
     {
+        ResolveReferences();
+
         Vector3 euler = transform.rotation.eulerAngles;
         yaw = euler.y;
         pitch = euler.x;
@@ -103,10 +108,12 @@ public class ThirdPersonCamera : MonoBehaviour
 
     private void Update()
     {
+        ResolveReferences();
+
         if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
             LockCursor(false);
 
-        // ¿ìÅ¬¸¯ÇÏ¸é Ä¿¼­ Àá±Ý(°ÔÀÓ Á¶ÀÛ¿ë)
+        // ï¿½ï¿½Å¬ï¿½ï¿½ï¿½Ï¸ï¿½ Ä¿ï¿½ï¿½ ï¿½ï¿½ï¿½(ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Û¿ï¿½)
         if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
             LockCursor(true);
 
@@ -118,9 +125,67 @@ public class ThirdPersonCamera : MonoBehaviour
 
     private void LateUpdate()
     {
+        ResolveReferences();
+
         ApplyRecoil();
         FollowTarget();
         HandleCollision();
+    }
+
+    private void ResolveReferences()
+    {
+        if (!autoFindPlayer) return;
+
+        Transform player = FindPlayerTransform();
+        if (player != null && target != player)
+        {
+            target = player;
+        }
+
+        if (target == null) return;
+
+        if (inputSource == null || inputSource.gameObject != target.gameObject)
+        {
+            inputSource = target.GetComponent<ThirdPersonInput>();
+        }
+
+        if (transform.IsChildOf(target))
+        {
+            transform.SetParent(null, true);
+        }
+    }
+
+    private Transform FindPlayerTransform()
+    {
+        GameObject playerObject = null;
+
+        try
+        {
+            playerObject = GameObject.FindGameObjectWithTag("Player");
+        }
+        catch (UnityException)
+        {
+            playerObject = null;
+        }
+
+        if (playerObject != null && playerObject.transform != transform)
+        {
+            return playerObject.transform;
+        }
+
+        PlayerHealth playerHealth = FindFirstObjectByType<PlayerHealth>();
+        if (playerHealth != null && playerHealth.transform != transform)
+        {
+            return playerHealth.transform;
+        }
+
+        ThirdPersonInput playerInput = FindFirstObjectByType<ThirdPersonInput>();
+        if (playerInput != null && playerInput.transform != transform)
+        {
+            return playerInput.transform;
+        }
+
+        return null;
     }
     private void UpdateAimScopeState()
     {
@@ -154,7 +219,7 @@ public class ThirdPersonCamera : MonoBehaviour
                 aimState = AimState.Scope;
                 SetFovScoped(true);
 
-                // 3¿¬Å¸ ¹æÁö
+                // 3ï¿½ï¿½Å¸ ï¿½ï¿½ï¿½ï¿½
                 lastRmbPressTime = -999f;
             }
             else
