@@ -14,9 +14,29 @@ public class LoginScreenUI : MonoBehaviour
     private Text statusText;
     private Button loginButton;
     private Button guestButton;
+    private Button newGuestButton;
+    private Button refreshButton;
+    private Text leaderboardStatus;
+    private Text personalBest;
+    private readonly Text[] ranks = new Text[10];
+    private readonly Text[] names = new Text[10];
+    private readonly Text[] scores = new Text[10];
+    private RectTransform contentRect;
+    private Canvas loginCanvas;
+    private bool enteringGame;
+    private bool refreshAfterLoad;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void CreateInLoginScene()
+    {
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+        EnsureLoginUI();
+    }
+
+    private static void HandleSceneLoaded(Scene scene, LoadSceneMode mode) => EnsureLoginUI();
+
+    private static void EnsureLoginUI()
     {
         if (SceneManager.GetActiveScene().name != "Login") return;
         if (FindFirstObjectByType<LoginScreenUI>() != null) return;
@@ -28,7 +48,22 @@ public class LoginScreenUI : MonoBehaviour
     private void Awake()
     {
         session = GameSession.GetOrCreate();
+        Time.timeScale = 1f;
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
         BuildUI();
+    }
+
+    private void Start() => RefreshLeaderboard();
+
+    private void Update()
+    {
+        float width = Mathf.Min(540f, ((RectTransform)loginCanvas.transform).rect.width - 48f);
+        contentRect.sizeDelta = new Vector2(Mathf.Max(240f, width), contentRect.sizeDelta.y);
+        if (session.AuthClient.IsSignedIn)
+            personalBest.text = $"{session.AuthClient.CurrentUser.displayName}   BEST {session.ScoreClient.BestScore:N0}   {session.ScoreClient.SaveStatus}";
+        else
+            personalBest.text = "";
     }
 
     private void OnEnable()
@@ -37,6 +72,9 @@ public class LoginScreenUI : MonoBehaviour
         session.AuthClient.SignInFailed += HandleFailed;
         session.PlayerDataClient.DataLoaded += HandlePlayerDataLoaded;
         session.PlayerDataClient.RequestFailed += HandleFailed;
+        session.ScoreClient.LeaderboardLoaded += HandleLeaderboardLoaded;
+        session.ScoreClient.LeaderboardFailed += HandleLeaderboardFailed;
+        session.ScoreClient.ScoreSaved += RefreshLeaderboard;
     }
 
     private void OnDisable()
@@ -47,6 +85,9 @@ public class LoginScreenUI : MonoBehaviour
         session.AuthClient.SignInFailed -= HandleFailed;
         session.PlayerDataClient.DataLoaded -= HandlePlayerDataLoaded;
         session.PlayerDataClient.RequestFailed -= HandleFailed;
+        session.ScoreClient.LeaderboardLoaded -= HandleLeaderboardLoaded;
+        session.ScoreClient.LeaderboardFailed -= HandleLeaderboardFailed;
+        session.ScoreClient.ScoreSaved -= RefreshLeaderboard;
     }
 
     private void BuildUI()
@@ -54,6 +95,7 @@ public class LoginScreenUI : MonoBehaviour
         EnsureEventSystem();
 
         Canvas canvas = CreateCanvas();
+        loginCanvas = canvas;
         Image background = CreateImage("Background", canvas.transform, new Color(0.05f, 0.07f, 0.09f, 1f));
         Stretch(background.rectTransform);
 
@@ -64,20 +106,29 @@ public class LoginScreenUI : MonoBehaviour
         accentRect.offsetMin = new Vector2(0f, 0f);
         accentRect.offsetMax = new Vector2(0f, 0f);
 
-        GameObject panelObject = new GameObject("LoginPanel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
-        panelObject.transform.SetParent(canvas.transform, false);
-        RectTransform panelRect = panelObject.GetComponent<RectTransform>();
-        panelRect.anchorMin = new Vector2(0.5f, 0.5f);
-        panelRect.anchorMax = new Vector2(0.5f, 0.5f);
-        panelRect.pivot = new Vector2(0.5f, 0.5f);
-        panelRect.sizeDelta = new Vector2(430f, 0f);
+        GameObject viewport = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask), typeof(ScrollRect));
+        viewport.transform.SetParent(canvas.transform, false);
+        Inset(viewport.GetComponent<RectTransform>(), 16f, 16f);
+        viewport.GetComponent<Mask>().showMaskGraphic = false;
 
-        Image panelImage = panelObject.GetComponent<Image>();
-        panelImage.color = new Color(0.1f, 0.12f, 0.15f, 0.94f);
+        GameObject panelObject = new GameObject("LoginContent", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        panelObject.transform.SetParent(viewport.transform, false);
+        RectTransform panelRect = panelObject.GetComponent<RectTransform>();
+        panelRect.anchorMin = new Vector2(0.5f, 1f);
+        panelRect.anchorMax = new Vector2(0.5f, 1f);
+        panelRect.pivot = new Vector2(0.5f, 1f);
+        panelRect.sizeDelta = new Vector2(540f, 0f);
+        contentRect = panelRect;
+        ScrollRect scroll = viewport.GetComponent<ScrollRect>();
+        scroll.viewport = viewport.GetComponent<RectTransform>();
+        scroll.content = panelRect;
+        scroll.horizontal = false;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 35f;
 
         VerticalLayoutGroup layout = panelObject.GetComponent<VerticalLayoutGroup>();
         layout.padding = new RectOffset(28, 28, 24, 26);
-        layout.spacing = 10f;
+        layout.spacing = 8f;
         layout.childControlWidth = true;
         layout.childControlHeight = false;
         layout.childForceExpandWidth = true;
@@ -87,7 +138,7 @@ public class LoginScreenUI : MonoBehaviour
         fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         CreateText("Title", panelObject.transform, "TPS PROJECT", 32, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.92f, 0.96f, 1f, 1f), 42f);
-        CreateText("Subtitle", panelObject.transform, "Sign in to load your player data.", 15, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.72f, 0.78f, 0.84f, 1f), 28f);
+        personalBest = CreateText("PersonalBest", panelObject.transform, "", 14, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(1f, 0.8f, 0.35f), 36f);
 
         usernameInput = CreateInput(panelObject.transform, "UsernameInput", "Username", false, "player");
         passwordInput = CreateInput(panelObject.transform, "PasswordInput", "Password", true, "1234");
@@ -96,9 +147,74 @@ public class LoginScreenUI : MonoBehaviour
         CreateSeparator(panelObject.transform);
 
         guestNameInput = CreateInput(panelObject.transform, "GuestNameInput", "Guest name", false, "Guest");
-        guestButton = CreateButton(panelObject.transform, "GuestButton", "START AS GUEST", HandleGuestClicked);
+        guestNameInput.characterLimit = 32;
+        guestButton = CreateButton(panelObject.transform, "GuestButton", session.AuthClient.HasSavedGuest ? "CONTINUE AS GUEST" : "START AS GUEST", HandleGuestClicked);
+        newGuestButton = CreateButton(panelObject.transform, "NewGuestButton", "NEW GUEST", HandleNewGuestClicked);
+        newGuestButton.gameObject.SetActive(session.AuthClient.HasSavedGuest);
 
         statusText = CreateText("Status", panelObject.transform, "Ready", 14, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.68f, 0.76f, 0.82f, 1f), 34f);
+        CreateSeparator(panelObject.transform);
+        CreateText("RankingTitle", panelObject.transform, "TOP 10", 24, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(1f, 0.8f, 0.35f), 34f);
+        leaderboardStatus = CreateText("RankingStatus", panelObject.transform, "Loading...", 14, FontStyle.Normal, TextAnchor.MiddleLeft, Color.white, 24f);
+        for (int i = 0; i < 10; i++)
+        {
+            GameObject row = new GameObject("RankRow" + i, typeof(RectTransform));
+            row.transform.SetParent(panelObject.transform, false);
+            SetLayoutHeight(row, 28f);
+            ranks[i] = CreateRowCell(row.transform, "Rank", 0f, 0.12f, TextAnchor.MiddleLeft);
+            names[i] = CreateRowCell(row.transform, "Name", 0.12f, 0.75f, TextAnchor.MiddleLeft);
+            scores[i] = CreateRowCell(row.transform, "Score", 0.75f, 1f, TextAnchor.MiddleRight);
+        }
+        refreshButton = CreateButton(panelObject.transform, "RefreshRanking", "REFRESH RANKING", RefreshLeaderboard);
+    }
+
+    private Text CreateRowCell(Transform parent, string name, float left, float right, TextAnchor alignment)
+    {
+        Text text = CreateText(name, parent, "", 16, FontStyle.Normal, alignment, Color.white, 28f);
+        text.rectTransform.anchorMin = new Vector2(left, 0f);
+        text.rectTransform.anchorMax = new Vector2(right, 1f);
+        text.rectTransform.offsetMin = Vector2.zero;
+        text.rectTransform.offsetMax = Vector2.zero;
+        text.horizontalOverflow = HorizontalWrapMode.Wrap;
+        text.verticalOverflow = VerticalWrapMode.Truncate;
+        text.resizeTextForBestFit = true;
+        text.resizeTextMinSize = 11;
+        text.resizeTextMaxSize = 16;
+        return text;
+    }
+
+    private void RefreshLeaderboard()
+    {
+        if (session.ScoreClient.IsLoadingLeaderboard)
+        {
+            refreshAfterLoad = true;
+            return;
+        }
+        refreshAfterLoad = false;
+        leaderboardStatus.text = "Loading...";
+        refreshButton.interactable = false;
+        session.ScoreClient.LoadLeaderboard();
+    }
+
+    private void HandleLeaderboardLoaded(ScoreClient.LeaderboardEntry[] entries)
+    {
+        leaderboardStatus.text = entries.Length == 0 ? "No scores yet" : "Highest scores";
+        refreshButton.interactable = true;
+        for (int i = 0; i < ranks.Length; i++)
+        {
+            bool present = i < entries.Length;
+            ranks[i].text = present ? entries[i].rank.ToString("00") : "";
+            names[i].text = present ? entries[i].displayName : "";
+            scores[i].text = present ? entries[i].bestScore.ToString("N0") : "";
+        }
+        if (refreshAfterLoad) RefreshLeaderboard();
+    }
+
+    private void HandleLeaderboardFailed(string error)
+    {
+        leaderboardStatus.text = error;
+        refreshButton.interactable = true;
+        if (refreshAfterLoad) RefreshLeaderboard();
     }
 
     private Canvas CreateCanvas()
@@ -111,7 +227,7 @@ public class LoginScreenUI : MonoBehaviour
 
         CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.referenceResolution = new Vector2(1280f, 1000f);
         scaler.matchWidthOrHeight = 0.5f;
 
         return canvas;
@@ -153,7 +269,8 @@ public class LoginScreenUI : MonoBehaviour
         button.targetGraphic = image;
         button.onClick.AddListener(onClick);
 
-        CreateText("Label", buttonObject.transform, label, 15, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white, 46f);
+        Text buttonLabel = CreateText("Label", buttonObject.transform, label, 15, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white, 46f);
+        Stretch(buttonLabel.rectTransform);
         return button;
     }
 
@@ -165,7 +282,9 @@ public class LoginScreenUI : MonoBehaviour
 
         Text label = textObject.GetComponent<Text>();
         label.text = text;
-        label.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        label.supportRichText = false;
+        label.raycastTarget = false;
         label.fontSize = fontSize;
         label.fontStyle = style;
         label.alignment = alignment;
@@ -191,14 +310,23 @@ public class LoginScreenUI : MonoBehaviour
 
     private void HandleLoginClicked()
     {
+        enteringGame = true;
         SetBusy(true, "Logging in...");
         session.AuthClient.LoginWithCredentials(usernameInput.text, passwordInput.text);
     }
 
     private void HandleGuestClicked()
     {
+        enteringGame = true;
         SetBusy(true, "Creating guest session...");
         session.AuthClient.LoginAsGuest(guestNameInput.text);
+    }
+
+    private void HandleNewGuestClicked()
+    {
+        enteringGame = true;
+        SetBusy(true, "Creating new guest...");
+        session.AuthClient.LoginAsNewGuest(guestNameInput.text);
     }
 
     private void HandleSignedIn(GameAuthClient.AuthUser user)
@@ -209,13 +337,15 @@ public class LoginScreenUI : MonoBehaviour
 
     private void HandlePlayerDataLoaded(PlayerDataClient.PlayerData data)
     {
+        if (!enteringGame) return;
         SetBusy(false, $"Loaded Lv.{data.level} data. Entering game...");
         SceneManager.LoadScene(mainSceneName);
     }
 
     private void HandleFailed(string error)
     {
-        SetBusy(false, error);
+        enteringGame = false;
+        SetBusy(false, "Sign-in failed. Check connection or account.");
     }
 
     private void SetBusy(bool busy, string status)
@@ -228,6 +358,8 @@ public class LoginScreenUI : MonoBehaviour
 
         if (guestButton != null)
             guestButton.interactable = !busy;
+        if (newGuestButton != null)
+            newGuestButton.interactable = !busy;
     }
 
     private void EnsureEventSystem()
@@ -261,5 +393,7 @@ public class LoginScreenUI : MonoBehaviour
 
         element.preferredHeight = height;
         element.minHeight = height;
+        RectTransform rect = gameObject.GetComponent<RectTransform>();
+        rect.sizeDelta = new Vector2(rect.sizeDelta.x, height);
     }
 }

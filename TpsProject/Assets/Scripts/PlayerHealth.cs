@@ -4,6 +4,7 @@ using System;
 public class PlayerHealth : MonoBehaviour, IDamageable
 {
     public event Action<float> Damaged;
+    public event Action Died;
 
     [Header("Health")]
     [SerializeField] private float maxHealth = 100f;
@@ -50,6 +51,7 @@ public class PlayerHealth : MonoBehaviour, IDamageable
     {
         if (IsDead) return;
         IsDead = true;
+        Died?.Invoke();
 
         ApplyAnimatorState();
 

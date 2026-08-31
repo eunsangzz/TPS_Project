@@ -7,7 +7,6 @@ using UnityEngine.Networking;
 public class PlayerDataClient : MonoBehaviour
 {
     [SerializeField] private GameAuthClient authClient;
-    [SerializeField] private string serverBaseUrl = "https://tps-project.onrender.com";
 
     public PlayerData CurrentData { get; private set; }
     public string LastError { get; private set; }
@@ -67,8 +66,9 @@ public class PlayerDataClient : MonoBehaviour
         IsBusy = true;
         LastError = string.Empty;
 
-        string url = $"{serverBaseUrl.TrimEnd('/')}/player-data";
+        string url = $"{authClient.ServerBaseUrl}/player-data";
         using UnityWebRequest request = new UnityWebRequest(url, method);
+        request.timeout = 90;
         request.downloadHandler = new DownloadHandlerBuffer();
         request.SetRequestHeader("Authorization", $"Bearer {authClient.Token}");
 
@@ -92,8 +92,8 @@ public class PlayerDataClient : MonoBehaviour
         CurrentData = response.playerData;
 
         Debug.Log($"[PlayerDataClient] Data received: Lv.{CurrentData.level}, coins={CurrentData.coins}, weapon={CurrentData.selectedWeapon}", this);
-        success?.Invoke(CurrentData);
         IsBusy = false;
+        success?.Invoke(CurrentData);
     }
 
     private void Fail(string error)
@@ -117,6 +117,7 @@ public class PlayerDataClient : MonoBehaviour
         public int level;
         public int xp;
         public int coins;
+        public int bestScore;
         public string selectedWeapon;
         public string lastLoginAt;
         public string updatedAt;

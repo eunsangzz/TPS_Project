@@ -40,6 +40,7 @@ public class GameAuthDebugUI : MonoBehaviour
 
     private void OnGUI()
     {
+        if (FindFirstObjectByType<LoginScreenUI>() != null) return;
         windowRect = GUI.Window(GetInstanceID(), windowRect, DrawWindow, "Server Login");
     }
 

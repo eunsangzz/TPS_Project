@@ -24,7 +24,9 @@ public class PlayerHUD : MonoBehaviour
     private int lastMag = -1;
     private int lastRes = -1;
     private int score;
-    private int lastScore = -1;
+    private string lastScoreLabel;
+    private bool runEnded;
+    private PlayerHealth subscribedHealth;
     private bool lastReload = false;
     private WeaponData.FireMode lastMode;
     private float nextEnemyScanTime;
@@ -41,6 +43,7 @@ public class PlayerHUD : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (subscribedHealth != null) subscribedHealth.Died -= HandlePlayerDied;
         foreach (EnemyHealth enemy in trackedEnemies)
         {
             if (enemy != null)
@@ -54,6 +57,12 @@ public class PlayerHUD : MonoBehaviour
     {
         if (playerHealth == null)
             playerHealth = FindFirstObjectByType<PlayerHealth>();
+        if (subscribedHealth != playerHealth)
+        {
+            if (subscribedHealth != null) subscribedHealth.Died -= HandlePlayerDied;
+            subscribedHealth = playerHealth;
+            if (subscribedHealth != null) subscribedHealth.Died += HandlePlayerDied;
+        }
 
         if (shooter == null)
             shooter = FindFirstObjectByType<ThirdPersonShooter>();
@@ -116,8 +125,8 @@ public class PlayerHUD : MonoBehaviour
 
     private void ArrangeGameplayText()
     {
-        SetHudTextPosition(ammoText, new Vector2(-32f, 112f));
-        SetHudTextPosition(modeText, new Vector2(-32f, 76f));
+        SetHudTextPosition(ammoText, new Vector2(-32f, 148f));
+        SetHudTextPosition(modeText, new Vector2(-32f, 112f));
         SetHudTextPosition(scoreText, new Vector2(-32f, 40f));
     }
 
@@ -161,12 +170,11 @@ public class PlayerHUD : MonoBehaviour
         bool ammoChanged = shooter != null && ((lastMag != shooter.AmmoInMag) || (lastRes != shooter.ReserveAmmo));
         bool reloadChanged = shooter != null && (lastReload != shooter.IsReloading);
         bool modeChanged = shooter != null && (lastMode != shooter.CurrentFireMode);
-        bool scoreChanged = lastScore != score;
 
         if (hpchanged) UpdateHealth();
         if (ammoChanged || reloadChanged) UpdateAmmo();
         if (modeChanged) UpdateMode();
-        if (scoreChanged) UpdateScore();
+        UpdateScore();
 
         if (playerHealth != null)
             lastHp = playerHealth.CurrentHealth;
@@ -179,7 +187,6 @@ public class PlayerHUD : MonoBehaviour
             lastMode = shooter.CurrentFireMode;
         }
 
-        lastScore = score;
     }
 
     private void ForceRefresh()
@@ -232,8 +239,17 @@ public class PlayerHUD : MonoBehaviour
 
     private void UpdateScore()
     {
-        if (scoreText != null)
-            scoreText.text = $"SCORE {score}";
+        ScoreClient client = GameSession.Instance != null ? GameSession.Instance.ScoreClient : null;
+        string label = client != null
+            ? $"SCORE {score}  |  BEST {client.BestScore}\n{client.SaveStatus}"
+            : $"SCORE {score}  |  OFFLINE";
+        if (scoreText != null && label != lastScoreLabel)
+        {
+            scoreText.fontSize = 22f;
+            scoreText.rectTransform.sizeDelta = new Vector2(480f, 60f);
+            scoreText.text = label;
+            lastScoreLabel = label;
+        }
     }
 
     private void TrackEnemies()
@@ -254,7 +270,18 @@ public class PlayerHUD : MonoBehaviour
             enemy.Died -= HandleEnemyDied;
 
         trackedEnemies.Remove(enemy);
-        score += pointsPerKill;
+        if (runEnded || (playerHealth != null && playerHealth.IsDead)) return;
+        score = (int)System.Math.Min(int.MaxValue, (long)score + Mathf.Max(0, pointsPerKill));
+        if (GameSession.Instance != null) GameSession.Instance.ScoreClient.QueueScore(score);
         UpdateScore();
+    }
+
+    private void HandlePlayerDied()
+    {
+        if (runEnded) return;
+        runEnded = true;
+        if (GameSession.Instance != null) GameSession.Instance.ScoreClient.QueueScore(score);
+        GameObject result = new GameObject("RunResultUI");
+        result.AddComponent<RunResultUI>().Show(score);
     }
 }

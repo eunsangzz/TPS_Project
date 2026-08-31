@@ -19,6 +19,8 @@ public class GameAuthClient : MonoBehaviour
     public string LastError { get; private set; }
     public bool IsBusy { get; private set; }
     public bool IsSignedIn => !string.IsNullOrEmpty(Token) && CurrentUser != null;
+    public string ServerBaseUrl => serverBaseUrl.TrimEnd('/');
+    public bool HasSavedGuest => PlayerPrefs.HasKey("GuestResumeToken");
 
     public event Action<AuthUser> SignedIn;
     public event Action<string> SignInFailed;
@@ -53,10 +55,19 @@ public class GameAuthClient : MonoBehaviour
     {
         GuestLoginRequest requestBody = new GuestLoginRequest
         {
-            displayName = displayName
+            displayName = displayName,
+            resumeToken = PlayerPrefs.GetString("GuestResumeToken", "")
         };
 
         yield return SendAuthRequest("/auth/guest", JsonUtility.ToJson(requestBody));
+    }
+
+    public void LoginAsNewGuest(string displayName)
+    {
+        if (IsBusy) return;
+        PlayerPrefs.DeleteKey("GuestResumeToken");
+        PlayerPrefs.Save();
+        LoginAsGuest(displayName);
     }
 
     public IEnumerator Login(string loginUsername, string loginPassword)
@@ -77,6 +88,7 @@ public class GameAuthClient : MonoBehaviour
 
         string url = $"{serverBaseUrl.TrimEnd('/')}{path}";
         using UnityWebRequest request = new UnityWebRequest(url, "POST");
+        request.timeout = 90;
         byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
 
         request.uploadHandler = new UploadHandlerRaw(bodyRaw);
@@ -89,8 +101,8 @@ public class GameAuthClient : MonoBehaviour
         {
             LastError = $"Auth failed: {request.responseCode} {request.error} {request.downloadHandler.text}";
             Debug.LogError($"[GameAuthClient] {LastError}", this);
-            SignInFailed?.Invoke(LastError);
             IsBusy = false;
+            SignInFailed?.Invoke(LastError);
             yield break;
         }
 
@@ -100,17 +112,20 @@ public class GameAuthClient : MonoBehaviour
         PlayerPrefs.SetString("AuthToken", Token);
         PlayerPrefs.SetString("AuthUserId", CurrentUser.id);
         PlayerPrefs.SetString("AuthDisplayName", CurrentUser.displayName);
+        if (CurrentUser.isGuest)
+            PlayerPrefs.SetString("GuestResumeToken", Token);
         PlayerPrefs.Save();
 
         Debug.Log($"[GameAuthClient] Login success: {CurrentUser.displayName} ({CurrentUser.id}), guest={CurrentUser.isGuest}", this);
-        SignedIn?.Invoke(CurrentUser);
         IsBusy = false;
+        SignedIn?.Invoke(CurrentUser);
     }
 
     [Serializable]
     private class GuestLoginRequest
     {
         public string displayName;
+        public string resumeToken;
     }
 
     [Serializable]

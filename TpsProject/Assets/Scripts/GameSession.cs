@@ -6,6 +6,7 @@ public class GameSession : MonoBehaviour
 
     public GameAuthClient AuthClient { get; private set; }
     public PlayerDataClient PlayerDataClient { get; private set; }
+    public ScoreClient ScoreClient { get; private set; }
 
     public PlayerDataClient.PlayerData PlayerData => PlayerDataClient != null ? PlayerDataClient.CurrentData : null;
 
@@ -38,5 +39,14 @@ public class GameSession : MonoBehaviour
             PlayerDataClient = gameObject.AddComponent<PlayerDataClient>();
 
         PlayerDataClient.SetAuthClient(AuthClient);
+        ScoreClient = GetComponent<ScoreClient>();
+        if (ScoreClient == null)
+            ScoreClient = gameObject.AddComponent<ScoreClient>();
+        ScoreClient.Initialize(AuthClient, PlayerDataClient);
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
     }
 }

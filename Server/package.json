@@ -5,9 +5,17 @@
   "description": "Simple Node.js API server for TPS Project.",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.9.0"
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8"
   }
 }
