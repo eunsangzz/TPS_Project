@@ -67,6 +67,7 @@ crashlytics-build.properties
 
 # Node.js server dependencies
 node_modules/
+Server/data/
 
 # Packed Addressables
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
