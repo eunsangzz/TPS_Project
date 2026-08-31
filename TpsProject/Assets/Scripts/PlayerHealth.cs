@@ -75,4 +75,11 @@ public class PlayerHealth : MonoBehaviour, IDamageable
         if (amount <= 0f) return;
         CurrentHealth = Mathf.Min(maxHealth, CurrentHealth + amount);
     }
+
+    public void IncreaseMaxHealth(float amount)
+    {
+        if (IsDead || amount <= 0f) return;
+        maxHealth += amount;
+        Heal(amount);
+    }
 }

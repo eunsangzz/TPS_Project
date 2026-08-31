@@ -23,6 +23,9 @@ public class EnemyCombat : MonoBehaviour
     [Header("Ranged Timing")]
     public float attackWindup = 0.25f;
 
+    [Header("Shot Visuals")]
+    public Color tracerColor = new Color(1f, 0.35f, 0.12f, 1f);
+
     [Header("Ranged Accuracy / Spread")]
     [Range(0f, 1f)] public float accuracy = 0.5f;
     public float spreadAngle = 18.0f;
@@ -41,16 +44,24 @@ public class EnemyCombat : MonoBehaviour
     private float nextAttackTime;
     private bool rangedAttackPending;
     private float pendingFireTime;
+    private EnemyHealth health;
+    private WeaponVFX weaponVFX;
 
     private void Awake()
     {
         if (self == null) self = transform;
+        health = GetComponent<EnemyHealth>();
     }
 
     private void Update()
     {
         if (enemyType != EnemyType.Ranged) return;
         if (!rangedAttackPending) return;
+        if (health != null && health.IsDead)
+        {
+            CancelPendingAttack();
+            return;
+        }
 
         if (Time.time >= pendingFireTime)
         {
@@ -96,6 +107,7 @@ public class EnemyCombat : MonoBehaviour
     public void TryAttack()
     {
         if (player == null) return;
+        if (health != null && health.IsDead) return;
 
         if (enemyType == EnemyType.Melee)
         {
@@ -132,9 +144,11 @@ public class EnemyCombat : MonoBehaviour
     private void FireRangedHitscan()
     {
         if (player == null) return;
+        if (health != null && health.IsDead) return;
 
         Vector3 fallbackOrigin = self.position + Vector3.up * 1.2f;
-        Vector3 origin = firePoint != null ? firePoint.position : fallbackOrigin;
+        // The actor root is at its feet, not at muzzle height.
+        Vector3 origin = firePoint != null && firePoint != self ? firePoint.position : fallbackOrigin;
         Vector3 targetPoint = player.position + Vector3.up * aimHeight;
 
         int shots = Mathf.Max(1, pelletCount);
@@ -151,11 +165,14 @@ public class EnemyCombat : MonoBehaviour
             }
 
             Ray ray = new Ray(origin, dir);
-            bool hitSomething = Physics.Raycast(ray, out RaycastHit hit, rangedRange, hitMask, triggerInteraction);
+            bool hitSomething = TryGetShotHit(ray, out RaycastHit hit);
 
-            if (hitSomething && IsSelfTransform(hit.transform))
+            if (Application.isPlaying)
             {
-                hitSomething = false;
+                if (weaponVFX == null) weaponVFX = GetComponentInChildren<WeaponVFX>();
+                if (weaponVFX == null) weaponVFX = gameObject.AddComponent<WeaponVFX>();
+                weaponVFX.PlayMuzzleFlash();
+                weaponVFX.PlayTracer(origin, hitSomething ? hit.point : origin + dir * rangedRange, tracerColor);
             }
 
             if (hitSomething)
@@ -175,6 +192,28 @@ public class EnemyCombat : MonoBehaviour
                     Debug.DrawLine(origin, origin + dir * rangedRange, Color.yellow, debugRayTime);
             }
         }
+    }
+
+    private bool TryGetShotHit(Ray ray, out RaycastHit closestHit)
+    {
+        closestHit = default;
+        float closestDistance = float.PositiveInfinity;
+        RaycastHit[] hits = Physics.RaycastAll(ray, rangedRange, hitMask, triggerInteraction);
+
+        // Ignore only this shooter's colliders; walls and other actors still block shots.
+        foreach (RaycastHit hit in hits)
+        {
+            if (IsSelfTransform(hit.collider.transform) || hit.distance >= closestDistance) continue;
+            closestHit = hit;
+            closestDistance = hit.distance;
+        }
+
+        return closestDistance < float.PositiveInfinity;
+    }
+
+    private void OnDisable()
+    {
+        CancelPendingAttack();
     }
 
     private Vector3 GetMissAimPoint(Vector3 targetPoint, Vector3 origin)

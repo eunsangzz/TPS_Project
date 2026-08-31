@@ -11,7 +11,8 @@ function playerData(row) {
   return {
     userId: row.user_id, displayName: row.display_name,
     level: row.level, xp: row.xp, coins: row.coins, selectedWeapon: row.selected_weapon,
-    bestScore: row.best_score, lastLoginAt: row.last_login_at, updatedAt: row.updated_at,
+    bestScore: row.best_score, bestSkills: row.best_skills || [], bestRunId: row.best_run_id,
+    lastLoginAt: row.last_login_at, updatedAt: row.updated_at,
   };
 }
 
@@ -115,25 +116,35 @@ class PlayerStore {
     return playerData(rows[0]);
   }
 
-  async saveScore(userId, score) {
-    // One SQL update prevents retries or concurrent requests lowering a record.
+  async saveScore(userId, score, skills = [], runId = null) {
+    // Keep the score and its build atomic. Only newer choices in that SAME run
+    // may enrich a tied record; another run or stale retry cannot replace it.
+    const revision = skills.reduce((total, skill) => total + skill.level, 0);
     const { rows } = await this.db.query(
       `UPDATE players SET
          best_score_at = CASE WHEN $2 > best_score THEN NOW() ELSE best_score_at END,
+         best_skills = CASE WHEN $2 > best_score OR
+           ($2 = best_score AND $4::text IS NOT NULL AND best_run_id = $4::text AND $5 > best_skill_revision)
+           THEN $3::jsonb ELSE best_skills END,
+         best_skill_revision = CASE WHEN $2 > best_score OR
+           ($2 = best_score AND $4::text IS NOT NULL AND best_run_id = $4::text AND $5 > best_skill_revision)
+           THEN $5 ELSE best_skill_revision END,
+         best_run_id = CASE WHEN $2 > best_score THEN $4::text ELSE best_run_id END,
          best_score = GREATEST(best_score, $2), updated_at = NOW()
        WHERE user_id = $1 RETURNING *`,
-      [userId, score],
+      [userId, score, JSON.stringify(skills), runId, revision],
     );
     return playerData(rows[0]);
   }
 
   async leaderboard() {
     const { rows } = await this.db.query(
-      `SELECT display_name, is_guest, best_score FROM players WHERE best_score > 0
+      `SELECT display_name, is_guest, best_score, best_skills FROM players WHERE best_score > 0
        ORDER BY best_score DESC, best_score_at ASC, user_id ASC LIMIT 10`,
     );
     return rows.map((row, index) => ({
       rank: index + 1, displayName: row.display_name, bestScore: row.best_score, isGuest: row.is_guest,
+      bestSkills: row.best_skills || [],
     }));
   }
 }

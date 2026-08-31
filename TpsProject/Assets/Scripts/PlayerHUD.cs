@@ -26,6 +26,7 @@ public class PlayerHUD : MonoBehaviour
     private int score;
     private string lastScoreLabel;
     private bool runEnded;
+    private int queuedSkillRevision = -1;
     private PlayerHealth subscribedHealth;
     private bool lastReload = false;
     private WeaponData.FireMode lastMode;
@@ -160,6 +161,11 @@ public class PlayerHUD : MonoBehaviour
         if (playerHealth == null || shooter == null)
             ResolveReferences();
 
+        bool centralWeaponBar = shooter != null && shooter.GetComponent<PlayerWeaponBarUI>() != null;
+        if (ammoText != null) ammoText.gameObject.SetActive(!centralWeaponBar);
+        if (modeText != null) modeText.gameObject.SetActive(!centralWeaponBar);
+        if (reloadText != null && centralWeaponBar) reloadText.gameObject.SetActive(false);
+
         if (Time.time >= nextEnemyScanTime)
         {
             TrackEnemies();
@@ -226,7 +232,7 @@ public class PlayerHUD : MonoBehaviour
         }
 
         if (reloadText != null)
-            reloadText.gameObject.SetActive(shooter.IsReloading);
+            reloadText.gameObject.SetActive(shooter.IsReloading && shooter.GetComponent<PlayerWeaponBarUI>() == null);
     }
 
     private void UpdateMode()
@@ -239,6 +245,8 @@ public class PlayerHUD : MonoBehaviour
 
     private void UpdateScore()
     {
+        PlayerSkills skills = playerHealth != null ? playerHealth.GetComponent<PlayerSkills>() : null;
+        if (!runEnded && skills != null && skills.SelectionCount != queuedSkillRevision) QueueCurrentScore();
         ScoreClient client = GameSession.Instance != null ? GameSession.Instance.ScoreClient : null;
         string label = client != null
             ? $"SCORE {score}  |  BEST {client.BestScore}\n{client.SaveStatus}"
@@ -272,7 +280,7 @@ public class PlayerHUD : MonoBehaviour
         trackedEnemies.Remove(enemy);
         if (runEnded || (playerHealth != null && playerHealth.IsDead)) return;
         score = (int)System.Math.Min(int.MaxValue, (long)score + Mathf.Max(0, pointsPerKill));
-        if (GameSession.Instance != null) GameSession.Instance.ScoreClient.QueueScore(score);
+        QueueCurrentScore();
         UpdateScore();
     }
 
@@ -280,8 +288,15 @@ public class PlayerHUD : MonoBehaviour
     {
         if (runEnded) return;
         runEnded = true;
-        if (GameSession.Instance != null) GameSession.Instance.ScoreClient.QueueScore(score);
+        QueueCurrentScore();
         GameObject result = new GameObject("RunResultUI");
         result.AddComponent<RunResultUI>().Show(score);
+    }
+
+    private void QueueCurrentScore()
+    {
+        PlayerSkills skills = playerHealth != null ? playerHealth.GetComponent<PlayerSkills>() : null;
+        queuedSkillRevision = skills != null ? skills.SelectionCount : 0;
+        if (GameSession.Instance != null) GameSession.Instance.ScoreClient.QueueScore(score, skills);
     }
 }

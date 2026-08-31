@@ -7,8 +7,11 @@ using UnityEngine.Networking;
 public class ScoreClient : MonoBehaviour
 {
     public int BestScore { get; private set; }
+    public ScoreSkillRecord[] BestSkills { get; private set; } = Array.Empty<ScoreSkillRecord>();
+    private string bestRunId;
     public bool IsSaving { get; private set; }
-    public bool HasPendingScore => pendingScore > BestScore;
+    public bool HasPendingScore => pending != null && IsNewer(pending.score, pending.runId,
+        ScoreSkillRecord.Revision(pending.skills), BestScore, bestRunId, ScoreSkillRecord.Revision(BestSkills));
     public bool IsLoadingLeaderboard { get; private set; }
     public string SaveStatus { get; private set; } = "Not signed in";
     public event Action ScoreSaved;
@@ -18,7 +21,7 @@ public class ScoreClient : MonoBehaviour
     private GameAuthClient auth;
     private PlayerDataClient playerData;
     private string userId;
-    private int pendingScore;
+    private ScoreRequest pending;
     private float nextAttempt;
     private float retryDelay = 2f;
     private bool needsLogin;
@@ -42,7 +45,13 @@ public class ScoreClient : MonoBehaviour
     {
         userId = user.id;
         BestScore = 0;
-        pendingScore = PlayerPrefs.GetInt(PendingKey(userId), 0);
+        BestSkills = Array.Empty<ScoreSkillRecord>();
+        bestRunId = null;
+        pending = null;
+        try { pending = JsonUtility.FromJson<ScoreRequest>(PlayerPrefs.GetString(RecordKey(userId), "")); }
+        catch (ArgumentException) { }
+        int legacyScore = PlayerPrefs.GetInt(PendingKey(userId), 0);
+        if (legacyScore > (pending?.score ?? 0)) pending = new ScoreRequest { score = legacyScore, skills = Array.Empty<ScoreSkillRecord>() };
         needsLogin = false;
         retryDelay = 2f;
         nextAttempt = 0f;
@@ -52,20 +61,29 @@ public class ScoreClient : MonoBehaviour
     private void HandleDataLoaded(PlayerDataClient.PlayerData data)
     {
         if (data.userId != userId) return;
-        BestScore = Mathf.Max(BestScore, data.bestScore);
-        data.bestScore = BestScore;
+        ApplyRecord(data);
         ClearSavedPending();
     }
 
     private static string PendingKey(string id) => "PendingBestScore_" + id;
+    private static string RecordKey(string id) => "PendingScoreRecord_" + id;
 
-    public void QueueScore(int score)
+    private static bool IsNewer(int score, string runId, int revision, int otherScore, string otherRunId, int otherRevision)
+    {
+        return score > otherScore || (score == otherScore && !string.IsNullOrEmpty(runId) && runId == otherRunId && revision > otherRevision);
+    }
+
+    public void QueueScore(int score, PlayerSkills skills = null)
     {
         if (auth == null || !auth.IsSignedIn || string.IsNullOrEmpty(userId)) return;
-        if (score <= BestScore || score <= pendingScore) return;
-        pendingScore = score;
-        // Save locally before sending so a failed request survives closing the game.
-        PlayerPrefs.SetInt(PendingKey(userId), pendingScore);
+        string runId = skills != null ? skills.RunId : null;
+        int revision = skills != null ? skills.SelectionCount : 0;
+        if (score <= 0 || !IsNewer(score, runId, revision, BestScore, bestRunId, ScoreSkillRecord.Revision(BestSkills))) return;
+        if (pending != null && !IsNewer(score, runId, revision, pending.score, pending.runId, ScoreSkillRecord.Revision(pending.skills))) return;
+        pending = new ScoreRequest { score = score, runId = runId, skills = skills != null ? skills.CreateScoreSnapshot() : Array.Empty<ScoreSkillRecord>() };
+        // Persist the immutable score/build pair together, before starting the request.
+        PlayerPrefs.SetString(RecordKey(userId), JsonUtility.ToJson(pending));
+        PlayerPrefs.DeleteKey(PendingKey(userId));
         PlayerPrefs.Save();
         if (!IsSaving && !needsLogin) SaveStatus = "Save pending";
     }
@@ -82,10 +100,10 @@ public class ScoreClient : MonoBehaviour
         SaveStatus = "Saving...";
         string requestUser = userId;
         string requestToken = auth.Token;
-        int submittedScore = pendingScore;
+        ScoreRequest submitted = pending;
         using UnityWebRequest request = new UnityWebRequest(auth.ServerBaseUrl + "/scores", "POST");
         request.timeout = 90;
-        request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(JsonUtility.ToJson(new ScoreRequest { score = submittedScore })));
+        request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(JsonUtility.ToJson(submitted)));
         request.downloadHandler = new DownloadHandlerBuffer();
         request.SetRequestHeader("Content-Type", "application/json");
         request.SetRequestHeader("Authorization", "Bearer " + requestToken);
@@ -99,11 +117,15 @@ public class ScoreClient : MonoBehaviour
             try { response = JsonUtility.FromJson<ScoreResponse>(request.downloadHandler.text); }
             catch (ArgumentException) { }
         }
-        if (response?.playerData != null && response.playerData.userId == userId && response.playerData.bestScore >= submittedScore)
+        if (response?.playerData != null && response.playerData.userId == userId && response.playerData.bestScore >= submitted.score)
         {
-            BestScore = Mathf.Max(BestScore, response.playerData.bestScore);
+            ApplyRecord(response.playerData);
             if (playerData.CurrentData != null && playerData.CurrentData.userId == userId)
+            {
                 playerData.CurrentData.bestScore = BestScore;
+                playerData.CurrentData.bestSkills = BestSkills;
+                playerData.CurrentData.bestRunId = bestRunId;
+            }
             ClearSavedPending();
             retryDelay = 2f;
             nextAttempt = 0f;
@@ -123,9 +145,26 @@ public class ScoreClient : MonoBehaviour
     private void ClearSavedPending()
     {
         if (HasPendingScore) return;
+        pending = null;
         PlayerPrefs.DeleteKey(PendingKey(userId));
+        PlayerPrefs.DeleteKey(RecordKey(userId));
         PlayerPrefs.Save();
         if (!IsSaving) SaveStatus = "Saved";
+    }
+
+    private void ApplyRecord(PlayerDataClient.PlayerData data)
+    {
+        bool stale = data.bestScore < BestScore || (data.bestScore == BestScore && data.bestRunId == bestRunId &&
+            ScoreSkillRecord.Revision(data.bestSkills) < ScoreSkillRecord.Revision(BestSkills));
+        if (!stale)
+        {
+            BestScore = data.bestScore;
+            BestSkills = data.bestSkills ?? Array.Empty<ScoreSkillRecord>();
+            bestRunId = data.bestRunId;
+        }
+        data.bestScore = BestScore;
+        data.bestSkills = BestSkills;
+        data.bestRunId = bestRunId;
     }
 
     public void LoadLeaderboard()
@@ -150,7 +189,7 @@ public class ScoreClient : MonoBehaviour
         else LeaderboardFailed?.Invoke("Ranking unavailable. Please retry.");
     }
 
-    [Serializable] private class ScoreRequest { public int score; }
+    [Serializable] private class ScoreRequest { public int score; public string runId; public ScoreSkillRecord[] skills; }
     [Serializable] private class ScoreResponse { public PlayerDataClient.PlayerData playerData; }
     [Serializable] private class LeaderboardResponse { public LeaderboardEntry[] entries; }
     [Serializable] public class LeaderboardEntry
@@ -158,6 +197,7 @@ public class ScoreClient : MonoBehaviour
         public int rank;
         public string displayName;
         public int bestScore;
+        public ScoreSkillRecord[] bestSkills;
         public bool isGuest;
     }
 }

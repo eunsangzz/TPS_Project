@@ -83,7 +83,6 @@ public static class EnemySpawnRepair
             combat.enemyType = enemyType;
             combat.self = root.transform;
             combat.player = null;
-            combat.firePoint = root.transform;
             combat.rangedRange = 18f;
             combat.accuracy = enemyType == EnemyType.Ranged ? 0.5f : combat.accuracy;
             combat.spreadAngle = enemyType == EnemyType.Ranged ? 18f : combat.spreadAngle;

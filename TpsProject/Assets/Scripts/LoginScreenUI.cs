@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -18,9 +17,11 @@ public class LoginScreenUI : MonoBehaviour
     private Button refreshButton;
     private Text leaderboardStatus;
     private Text personalBest;
+    private Text personalSkills;
     private readonly Text[] ranks = new Text[10];
     private readonly Text[] names = new Text[10];
     private readonly Text[] scores = new Text[10];
+    private readonly Text[] skillRecords = new Text[10];
     private RectTransform contentRect;
     private Canvas loginCanvas;
     private bool enteringGame;
@@ -64,6 +65,14 @@ public class LoginScreenUI : MonoBehaviour
             personalBest.text = $"{session.AuthClient.CurrentUser.displayName}   BEST {session.ScoreClient.BestScore:N0}   {session.ScoreClient.SaveStatus}";
         else
             personalBest.text = "";
+        personalSkills.gameObject.SetActive(session.AuthClient.IsSignedIn);
+        if (session.AuthClient.IsSignedIn)
+        {
+            personalSkills.text = "BEST BUILD: " + ScoreSkillRecord.Format(session.ScoreClient.BestSkills);
+            FitSkillText(personalSkills);
+        }
+        foreach (Text record in skillRecords)
+            if (record.gameObject.activeSelf) FitSkillText(record);
     }
 
     private void OnEnable()
@@ -92,7 +101,7 @@ public class LoginScreenUI : MonoBehaviour
 
     private void BuildUI()
     {
-        EnsureEventSystem();
+        GameUIInput.EnsureEventSystem(transform);
 
         Canvas canvas = CreateCanvas();
         loginCanvas = canvas;
@@ -139,6 +148,7 @@ public class LoginScreenUI : MonoBehaviour
 
         CreateText("Title", panelObject.transform, "TPS PROJECT", 32, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.92f, 0.96f, 1f, 1f), 42f);
         personalBest = CreateText("PersonalBest", panelObject.transform, "", 14, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(1f, 0.8f, 0.35f), 36f);
+        personalSkills = CreateText("PersonalSkills", panelObject.transform, "", 13, FontStyle.Normal, TextAnchor.UpperLeft, new Color(0.68f, 0.85f, 0.8f), 24f);
 
         usernameInput = CreateInput(panelObject.transform, "UsernameInput", "Username", false, "player");
         passwordInput = CreateInput(panelObject.transform, "PasswordInput", "Password", true, "1234");
@@ -164,6 +174,7 @@ public class LoginScreenUI : MonoBehaviour
             ranks[i] = CreateRowCell(row.transform, "Rank", 0f, 0.12f, TextAnchor.MiddleLeft);
             names[i] = CreateRowCell(row.transform, "Name", 0.12f, 0.75f, TextAnchor.MiddleLeft);
             scores[i] = CreateRowCell(row.transform, "Score", 0.75f, 1f, TextAnchor.MiddleRight);
+            skillRecords[i] = CreateText("RankSkills" + i, panelObject.transform, "", 13, FontStyle.Normal, TextAnchor.UpperLeft, new Color(0.68f, 0.78f, 0.8f), 24f);
         }
         refreshButton = CreateButton(panelObject.transform, "RefreshRanking", "REFRESH RANKING", RefreshLeaderboard);
     }
@@ -206,8 +217,17 @@ public class LoginScreenUI : MonoBehaviour
             ranks[i].text = present ? entries[i].rank.ToString("00") : "";
             names[i].text = present ? entries[i].displayName : "";
             scores[i].text = present ? entries[i].bestScore.ToString("N0") : "";
+            ranks[i].transform.parent.gameObject.SetActive(present);
+            skillRecords[i].gameObject.SetActive(present);
+            skillRecords[i].text = present ? ScoreSkillRecord.Format(entries[i].bestSkills) : "";
         }
         if (refreshAfterLoad) RefreshLeaderboard();
+    }
+
+    private void FitSkillText(Text label)
+    {
+        float height = Mathf.Max(22f, label.preferredHeight + 6f);
+        if (!Mathf.Approximately(label.rectTransform.sizeDelta.y, height)) SetLayoutHeight(label.gameObject, height);
     }
 
     private void HandleLeaderboardFailed(string error)
@@ -360,14 +380,6 @@ public class LoginScreenUI : MonoBehaviour
             guestButton.interactable = !busy;
         if (newGuestButton != null)
             newGuestButton.interactable = !busy;
-    }
-
-    private void EnsureEventSystem()
-    {
-        if (FindFirstObjectByType<EventSystem>() != null) return;
-
-        GameObject eventSystem = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-        eventSystem.transform.SetParent(transform, false);
     }
 
     private void Stretch(RectTransform rect)

@@ -22,6 +22,8 @@ public class StageManager : MonoBehaviour
     [SerializeField] private bool startOnAwake = true;
 
     [Header("Spawn")]
+    [Tooltip("Spawn across the baked NavMesh. Disable to use the manual bounds and center/edge limits.")]
+    [SerializeField] private bool useEntireNavMesh = true;
     [SerializeField] private Vector3 spawnBoundsCenter = new Vector3(550f, 25f, 500f);
     [SerializeField] private Vector3 spawnBoundsSize = new Vector3(900f, 80f, 900f);
     [SerializeField] private float spawnAreaEdgeInset = 0.22f;
@@ -42,6 +44,15 @@ public class StageManager : MonoBehaviour
     private int currentStage;
     private bool startingNextStage;
     private bool warnedMissingEnemyPrefabs;
+    private NavMeshTriangulation spawnMesh;
+    private readonly List<int> spawnTriangles = new List<int>();
+    private readonly List<float> spawnTriangleAreas = new List<float>();
+    private NavMeshPath spawnPath;
+    private float totalSpawnArea;
+    private SkillSelectionUI skillSelection;
+
+    public int CurrentStage => currentStage;
+    public bool IsChoosingSkill => skillSelection != null && skillSelection.IsOpen;
 
 #if UNITY_EDITOR
     private GameObject[] editorFallbackEnemyPrefabObjects;
@@ -74,6 +85,11 @@ public class StageManager : MonoBehaviour
         startingNextStage = false;
         currentStage++;
 
+        ThirdPersonShooter shooter = player != null ? player.GetComponent<ThirdPersonShooter>() : null;
+        if (shooter != null) shooter.ResetAmmoForStage();
+        PlayerMelee melee = player != null ? player.GetComponent<PlayerMelee>() : null;
+        if (melee != null) melee.CancelAttack();
+
         int enemyCount = Mathf.Max(1, firstStageEnemyCount + (currentStage - 1) * enemiesAddedPerStage);
         SpawnStage(enemyCount);
         RefreshUI();
@@ -81,6 +97,7 @@ public class StageManager : MonoBehaviour
 
     private void SpawnStage(int enemyCount)
     {
+        RebuildSpawnMesh();
         for (int i = 0; i < enemyCount; i++)
         {
             GameObject prefabObject = PickEnemyPrefabObject();
@@ -90,7 +107,11 @@ public class StageManager : MonoBehaviour
                 continue;
             }
 
-            Vector3 position = FindSpawnPosition();
+            if (!TryFindSpawnPosition(out Vector3 position))
+            {
+                Debug.LogWarning("[StageManager] No valid spawn position. Check baked NavMesh coverage, player connectivity, and Min Distance From Player. No forward fallback was used.", this);
+                continue;
+            }
             Quaternion rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
             GameObject enemyObject = Instantiate(prefabObject, position, rotation);
             EnemyAI enemy = EnsureSpawnedEnemyComponents(enemyObject, InferEnemyType(prefabObject));
@@ -175,7 +196,6 @@ public class StageManager : MonoBehaviour
         EnemyCombat combat = EnsureComponent<EnemyCombat>(enemyObject);
         combat.enemyType = enemyType;
         combat.self = enemyObject.transform;
-        combat.firePoint = enemyObject.transform;
 
         EnemyPerception perception = EnsureComponent<EnemyPerception>(enemyObject);
         perception.self = enemyObject.transform;
@@ -264,65 +284,96 @@ public class StageManager : MonoBehaviour
         }
     }
 
-    private Vector3 FindSpawnPosition()
+    private void RebuildSpawnMesh()
     {
-        for (int i = 0; i < spawnAttemptsPerEnemy; i++)
+        spawnMesh = NavMesh.CalculateTriangulation();
+        spawnTriangles.Clear();
+        spawnTriangleAreas.Clear();
+        totalSpawnArea = 0f;
+        for (int i = 0; i < spawnMesh.indices.Length; i += 3)
+        {
+            Vector3 a = spawnMesh.vertices[spawnMesh.indices[i]];
+            Vector3 b = spawnMesh.vertices[spawnMesh.indices[i + 1]];
+            Vector3 c = spawnMesh.vertices[spawnMesh.indices[i + 2]];
+            float area = Vector3.Cross(b - a, c - a).magnitude * 0.5f;
+            if (area <= 0.0001f) continue;
+            totalSpawnArea += area;
+            spawnTriangles.Add(i);
+            spawnTriangleAreas.Add(totalSpawnArea);
+        }
+    }
+
+    private bool TryFindSpawnPosition(out Vector3 position)
+    {
+        position = Vector3.zero;
+        if (spawnTriangles.Count == 0) return false;
+        if (spawnPath == null) spawnPath = new NavMeshPath();
+        NavMeshQueryFilter filter = new NavMeshQueryFilter { agentTypeID = 0, areaMask = NavMesh.AllAreas };
+        Vector3 playerAnchor = Vector3.zero;
+        if (player != null)
+        {
+            if (!NavMesh.SamplePosition(player.position, out NavMeshHit playerHit, Mathf.Max(0.5f, navMeshSampleRadius), filter))
+                return false;
+            playerAnchor = playerHit.position;
+        }
+
+        bool found = false;
+        float bestSpacing = -1f;
+        int validCandidates = 0;
+        for (int i = 0; i < Mathf.Max(1, spawnAttemptsPerEnemy); i++)
         {
             Vector3 candidate = PickSpawnCandidate();
-
-            if (player != null && Vector3.Distance(candidate, player.position) < minDistanceFromPlayer)
-            {
+            // Candidates already lie on triangles: only correct small precision errors,
+            // rather than pulling distant points onto the same nearby NavMesh edge.
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, 0.5f, filter)) continue;
+            if (!useEntireNavMesh && !IsInsideBiasedSpawnBounds(hit.position)) continue;
+            if (player != null && HorizontalDistanceSquared(hit.position, player.position) < minDistanceFromPlayer * minDistanceFromPlayer)
                 continue;
-            }
+            if (player != null && (!NavMesh.CalculatePath(hit.position, playerAnchor, filter, spawnPath) ||
+                spawnPath.status != NavMeshPathStatus.PathComplete)) continue;
 
-            if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, navMeshSampleRadius, NavMesh.AllAreas))
+            float spacing = float.PositiveInfinity;
+            foreach (EnemyHealth enemy in aliveEnemies)
             {
-                return hit.position;
+                if (enemy == null || enemy.IsDead) continue;
+                spacing = Mathf.Min(spacing, HorizontalDistanceSquared(hit.position, enemy.transform.position));
             }
+            if (!found || spacing > bestSpacing)
+            {
+                found = true;
+                bestSpacing = spacing;
+                position = hit.position;
+            }
+            // First spawn is uniform by surface area; later spawns prefer open gaps.
+            if (float.IsPositiveInfinity(spacing) || ++validCandidates >= 24) break;
         }
-
-        Vector3 fallback = player != null ? player.position + player.forward * minDistanceFromPlayer : transform.position;
-        if (NavMesh.SamplePosition(fallback, out NavMeshHit fallbackHit, navMeshSampleRadius * 3f, NavMesh.AllAreas))
-        {
-            return fallbackHit.position;
-        }
-
-        return fallback;
+        return found;
     }
 
     private Vector3 PickSpawnCandidate()
     {
-        if (TryPickPatrolAreaSpawnPoint(out Vector3 patrolPoint))
-            return patrolPoint;
-
-        float bias = Mathf.Clamp01(spawnCenterBias);
-        float halfX = spawnBoundsSize.x * 0.5f * bias;
-        float halfZ = spawnBoundsSize.z * 0.5f * bias;
-
-        Vector2 random = Random.insideUnitCircle;
-        return spawnBoundsCenter + new Vector3(random.x * halfX, 0f, random.y * halfZ);
+        float area = Random.value * totalSpawnArea;
+        int triangle = spawnTriangleAreas.BinarySearch(area);
+        if (triangle < 0) triangle = ~triangle;
+        int index = spawnTriangles[Mathf.Min(triangle, spawnTriangles.Count - 1)];
+        Vector3 a = spawnMesh.vertices[spawnMesh.indices[index]];
+        Vector3 b = spawnMesh.vertices[spawnMesh.indices[index + 1]];
+        Vector3 c = spawnMesh.vertices[spawnMesh.indices[index + 2]];
+        float u = Mathf.Sqrt(Random.value);
+        float v = Random.value;
+        return (1f - u) * a + u * (1f - v) * b + u * v * c;
     }
 
-    private bool TryPickPatrolAreaSpawnPoint(out Vector3 point)
+    private static float HorizontalDistanceSquared(Vector3 a, Vector3 b)
     {
-        point = Vector3.zero;
-        if (patrolAreas == null || patrolAreas.Length == 0) return false;
-
-        for (int i = 0; i < 12; i++)
-        {
-            PatrolArea area = patrolAreas[Random.Range(0, patrolAreas.Length)];
-            if (area == null) continue;
-            if (!area.TryGetRandomNavMeshPoint(spawnAreaEdgeInset, navMeshSampleRadius, out point)) continue;
-            if (!IsInsideBiasedSpawnBounds(point)) continue;
-            return true;
-        }
-
-        return false;
+        float x = a.x - b.x;
+        float z = a.z - b.z;
+        return x * x + z * z;
     }
 
     private bool IsInsideBiasedSpawnBounds(Vector3 point)
     {
-        float bias = Mathf.Clamp01(spawnCenterBias);
+        float bias = Mathf.Min(Mathf.Clamp01(spawnCenterBias), 1f - 2f * Mathf.Clamp(spawnAreaEdgeInset, 0f, 0.49f));
         Vector3 half = spawnBoundsSize * 0.5f * bias;
         Vector3 delta = point - spawnBoundsCenter;
 
@@ -332,7 +383,7 @@ public class StageManager : MonoBehaviour
     private void HandleEnemyDied(EnemyHealth enemy)
     {
         enemy.Died -= HandleEnemyDied;
-        aliveEnemies.Remove(enemy);
+        if (!aliveEnemies.Remove(enemy)) return;
         RefreshUI();
 
         if (aliveEnemies.Count == 0 && !startingNextStage)
@@ -346,7 +397,17 @@ public class StageManager : MonoBehaviour
         startingNextStage = true;
         RefreshUI();
         yield return new WaitForSeconds(nextStageDelay);
-        BeginNextStage();
+        PlayerHealth health = player != null ? player.GetComponent<PlayerHealth>() : null;
+        if (player == null || (health != null && health.IsDead)) yield break;
+        PlayerSkills skills = player.GetComponent<PlayerSkills>();
+        if (skills == null) skills = player.gameObject.AddComponent<PlayerSkills>();
+        if (skillSelection == null)
+        {
+            GameObject root = new GameObject("SkillSelectionUI", typeof(RectTransform), typeof(SkillSelectionUI));
+            root.transform.SetParent(transform, false);
+            skillSelection = root.GetComponent<SkillSelectionUI>();
+        }
+        skillSelection.Show(skills, currentStage, BeginNextStage);
     }
 
     private void RefreshUI()
@@ -372,5 +433,12 @@ public class StageManager : MonoBehaviour
         rect.anchorMax = Vector2.one;
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
+    }
+
+    private void OnDestroy()
+    {
+        foreach (EnemyHealth enemy in aliveEnemies)
+            if (enemy != null) enemy.Died -= HandleEnemyDied;
+        if (skillSelection != null) skillSelection.Cancel();
     }
 }

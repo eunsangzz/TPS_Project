@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS players (
 );
 CREATE INDEX IF NOT EXISTS players_leaderboard_idx
     ON players (best_score DESC, best_score_at ASC, user_id ASC);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS best_skills JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS best_run_id VARCHAR(32);
+ALTER TABLE players ADD COLUMN IF NOT EXISTS best_skill_revision INTEGER NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES players(user_id) ON DELETE CASCADE,

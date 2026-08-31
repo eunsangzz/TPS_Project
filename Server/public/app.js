@@ -8,6 +8,34 @@ let authBusy = false;
 let sessionVersion = 0;
 let refreshBusy = false;
 
+const skillNames = {
+  PowerRounds: "강화 탄환", PiercingRounds: "관통 탄환", HeavyStrike: "강타",
+  WideSwing: "넓은 휘두르기", AmmoRecovery: "탄약 회수", Toughness: "강인함",
+  FirstAid: "응급 처치", Vitality: "체력 보강", Supply: "보급 지원",
+};
+
+function renderSkills(container, records, collapsible = false) {
+  const skills = Array.isArray(records) ? records.filter((skill) => skill && Object.hasOwn(skillNames, skill.id) && Number.isInteger(skill.level) && skill.level > 0) : [];
+  container.replaceChildren();
+  if (skills.length === 0) { container.textContent = "선택 기록 없음"; return; }
+  let parent = container;
+  if (collapsible) {
+    parent = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = `선택 스킬 ${skills.length}종`;
+    parent.append(summary);
+    container.append(parent);
+  }
+  const list = document.createElement("ul");
+  for (const skill of skills) {
+    const item = document.createElement("li");
+    const bonus = ["FirstAid", "Vitality", "Supply"].includes(skill.id);
+    item.textContent = `${skillNames[skill.id]} ${bonus ? `${skill.level}회` : `Lv.${skill.level}`}`;
+    list.append(item);
+  }
+  parent.append(list);
+}
+
 const errors = {
   INVALID_CREDENTIALS: "아이디 또는 비밀번호를 확인해주세요.",
   INVALID_USERNAME: "아이디는 영문·숫자·밑줄로 3~24자 입력해주세요.",
@@ -85,7 +113,7 @@ function setAuthBusy(busy) {
 function showSignedOut() {
   element("auth-panel").hidden = false;
   element("profile-panel").hidden = true;
-  for (const id of ["display-name-value", "username-value", "best-score", "my-rank", "level", "xp", "coins", "weapon"]) element(id).textContent = "";
+  for (const id of ["display-name-value", "username-value", "best-score", "best-skills", "my-rank", "level", "xp", "coins", "weapon"]) element(id).textContent = "";
 }
 
 async function loadProfile(version = sessionVersion, quiet = false) {
@@ -97,6 +125,7 @@ async function loadProfile(version = sessionVersion, quiet = false) {
     element("display-name-value").textContent = data.user.displayName;
     element("username-value").textContent = "@" + data.user.username;
     element("best-score").textContent = number.format(data.playerData.bestScore);
+    renderSkills(element("best-skills"), data.playerData.bestSkills);
     element("my-rank").textContent = data.rank ? number.format(data.rank) + "위" : "기록 없음";
     for (const key of ["level", "xp", "coins"]) element(key).textContent = number.format(data.playerData[key]);
     element("weapon").textContent = data.playerData.selectedWeapon;
@@ -125,6 +154,10 @@ async function loadRanking() {
       badge.textContent = "GUEST";
       row.children[1].append(badge);
     }
+    const build = document.createElement("div");
+    build.className = "record-skills";
+    renderSkills(build, entry.bestSkills, true);
+    row.children[1].append(build);
     fragment.append(row);
   }
   element("ranking-body").replaceChildren(fragment);

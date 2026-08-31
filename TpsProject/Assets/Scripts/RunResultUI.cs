@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -22,8 +21,7 @@ public class RunResultUI : MonoBehaviour
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1280f, 720f);
         gameObject.AddComponent<GraphicRaycaster>();
-        if (FindFirstObjectByType<EventSystem>() == null)
-            new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule)).transform.SetParent(transform);
+        GameUIInput.EnsureEventSystem(transform);
 
         GameObject shade = new GameObject("Backdrop", typeof(RectTransform), typeof(Image));
         shade.transform.SetParent(transform, false);

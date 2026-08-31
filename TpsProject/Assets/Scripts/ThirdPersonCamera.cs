@@ -3,7 +3,7 @@ using UnityEngine.InputSystem;
 
 public class ThirdPersonCamera : MonoBehaviour
 {
-    //ī�޶� ����
+    //카占쌨띰옙 占쏙옙占쏙옙
     [Header("Look")]
     [SerializeField] private float mouseSensitivity = 0.05f;
     [SerializeField] private float pitchMin = -35f;
@@ -12,12 +12,12 @@ public class ThirdPersonCamera : MonoBehaviour
     [Header("Follow")]
     [SerializeField] private float followHeight = 2.1f;
 
-    //ī�޶� �̵��� �浹 ����
+    //카占쌨띰옙 占싱듸옙占쏙옙 占썸돌 占쏙옙占쏙옙
     [Header("Distance")]
     [SerializeField] private float defaultDistance = 3.0f;
     [SerializeField] private float minDistance = 0.5f;
-    [SerializeField] private float collisionRadius = 0.25f; //������
-    [SerializeField] private float distanceSmooth = 12f; //�Ÿ� ������ ���Ӽ�
+    [SerializeField] private float collisionRadius = 0.25f; //占쏙옙占쏙옙占쏙옙
+    [SerializeField] private float distanceSmooth = 12f; //占신몌옙 占쏙옙占쏙옙占쏙옙 占쏙옙占쌈쇽옙
     [SerializeField] private LayerMask collisionMask;
 
     [Header("Target")]
@@ -33,9 +33,9 @@ public class ThirdPersonCamera : MonoBehaviour
     private enum AimState { Hip, Shoulder, Scope }
 
     [Header("Aim/Scope")]
-    [SerializeField] private float scopeDoubleClickWindow = 0.25f; // ��Ŭ�� ����Ŭ�� ���� �ð�
-    [SerializeField] private float zoomMultiplier = 4f;            // 4�� ��
-    [SerializeField] private float zoomSmooth = 12f;               // �� ��ȯ �ӵ�
+    [SerializeField] private float scopeDoubleClickWindow = 0.25f; // 占쏙옙클占쏙옙 占쏙옙占쏙옙클占쏙옙 占쏙옙占쏙옙 占시곤옙
+    [SerializeField] private float zoomMultiplier = 4f;            // 4占쏙옙 占쏙옙
+    [SerializeField] private float zoomSmooth = 12f;               // 占쏙옙 占쏙옙환 占쌈듸옙
 
     [Header("Aim Sens")]
     [SerializeField, Range(0.05f, 1f)] private float scopedSensitivityMultiplier = 0.35f;
@@ -113,7 +113,7 @@ public class ThirdPersonCamera : MonoBehaviour
         if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
             LockCursor(false);
 
-        // ��Ŭ���ϸ� Ŀ�� ���(���� ���ۿ�)
+        // 占쏙옙클占쏙옙占싹몌옙 커占쏙옙 占쏙옙占?占쏙옙占쏙옙 占쏙옙占쌜울옙)
         if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
             LockCursor(true);
 
@@ -189,6 +189,14 @@ public class ThirdPersonCamera : MonoBehaviour
     }
     private void UpdateAimScopeState()
     {
+        PlayerLoadout loadout = target != null ? target.GetComponent<PlayerLoadout>() : null;
+        if (Time.timeScale <= 0f || (loadout != null && !loadout.IsGunEquipped))
+        {
+            aimState = AimState.Hip;
+            lastRmbPressTime = -999f;
+            SetFovScoped(false);
+            return;
+        }
         if (Mouse.current == null) return;
 
         bool rmbHeld = Mouse.current.rightButton.isPressed;
@@ -219,7 +227,7 @@ public class ThirdPersonCamera : MonoBehaviour
                 aimState = AimState.Scope;
                 SetFovScoped(true);
 
-                // 3��Ÿ ����
+                // 3占쏙옙타 占쏙옙占쏙옙
                 lastRmbPressTime = -999f;
             }
             else

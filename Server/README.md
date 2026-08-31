@@ -53,21 +53,38 @@ Free plan limitations: https://render.com/docs/free
 ## Score Flow
 
 - Every run starts at score zero. Enemy kills enqueue the running total.
-- Unity sends `POST /scores` with `{ "score": 500 }` and a Bearer token.
+- Unity sends `POST /scores` with a Bearer token and an immutable run snapshot:
+  `{ "score": 500, "runId": "0123456789abcdef0123456789abcdef", "skills": [{ "id": "PowerRounds", "level": 2 }] }`.
+  Skill IDs match the Unity enum; permanent skills store their level and repeatable
+  rewards store their selection count. Unknown IDs, duplicate IDs and invalid levels
+  are rejected. Older clients may omit `skills` and `runId`.
 - PostgreSQL updates `best_score = GREATEST(best_score, submitted_score)` atomically.
-  Lower scores, retries and simultaneous submissions cannot erase the best score.
-- `GET /player-data` returns the account's `bestScore` on login.
+  The same statement stores that record's skill snapshot and run ID. Lower scores,
+  retries and simultaneous submissions cannot mix builds from different runs.
+- A tied score updates skills only for the same run and a newer selection count.
+  This records a stage reward even when the player dies before their next kill.
+  A different run with the same score preserves the earlier record and build.
+- `GET /player-data` returns `bestScore`, `bestSkills` and `bestRunId` on login.
 - `GET /leaderboard` is public and returns up to ten positive scores, highest first.
-  Ties use the earliest record timestamp, then a stable user ID ordering.
+  Entries include `bestSkills` but not private run IDs. Ties use the earliest
+  record timestamp, then a stable user ID ordering.
 - The Login scene creates its UI automatically, including ranking refresh and
   loading/empty/error states. No new scene objects need to be wired in Inspector.
 - The HUD shows the current run, confirmed personal best and save status.
 - On death, the result overlay pauses gameplay. `RETURN TO LOGIN` opens Login
   again. The persistent GameSession keeps pending HTTP saves alive across scenes.
-- Pending best scores are saved locally by user ID, retried with backoff and
-  removed only after the DB confirms the score. Reopening the game and signing
+- Pending scores, run IDs and skill snapshots are saved together locally by user ID,
+  retried with backoff, and removed after confirmation or supersession by a newer
+  record. Reopening the game and signing
   into the same account retries a pending save. Force-quitting before success
   cannot guarantee the server has received it yet.
+- Login rankings show skill names and levels below each player. The browser portal
+  shows the personal best build and expandable skill lists in public rankings.
+  This is best-record metadata, not a match-history table or persistent skill unlocks.
+- Deploy the server changes before using the updated Unity client online. Startup
+  adds `best_skills`, `best_run_id` and `best_skill_revision` columns without erasing
+  existing records. No additional environment variables are needed. Old records
+  display no skill history; previously unrecorded choices cannot be recovered.
 
 ## Identity and Security Limits
 

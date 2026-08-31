@@ -76,4 +76,20 @@ public class WeaponRuntime
     {
         isReloading = false;
     }
+
+    public void AddReserveAmmo(int amount, int totalCapacity)
+    {
+        int space = Mathf.Max(0, totalCapacity - ammoInMag - reserveAmmo);
+        reserveAmmo += Mathf.Min(Mathf.Max(0, amount), space);
+    }
+
+    public void ResetAmmo(WeaponData data, int totalAmmo)
+    {
+        int total = Mathf.Max(0, totalAmmo);
+        ammoInMag = Mathf.Min(Mathf.Clamp(data.magazineSize, 1, 999), total);
+        reserveAmmo = total - ammoInMag;
+        infiniteReserveAmmo = false;
+        isReloading = false;
+        nextFireTime = 0f;
+    }
 }

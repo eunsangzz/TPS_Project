@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+[DefaultExecutionOrder(-100)]
 public class ThirdPersonInput : MonoBehaviour
 {
     public Vector2 Move { get; private set; }
@@ -8,12 +9,13 @@ public class ThirdPersonInput : MonoBehaviour
     public bool JumpPressed { get; private set; }
     public bool SprintHeld { get; private set; }
     public bool FreeLookHeld { get; private set; }
-    public bool AimHeld { get; private set; } //ø°¿”
+    public bool AimHeld { get; private set; } //ÏóêÏûÑ
     public bool FireHeld { get; private set; }
     public bool FirePressed { get; private set; }
     public bool ReloadPressed { get; private set; }
     public bool ToggleFireModePressed { get; private set; }
     public bool CoverPressed { get; private set; }
+    public int WeaponSlotPressed { get; private set; }
 
     private InputAction moveAction;
     private InputAction lookAction;
@@ -25,6 +27,8 @@ public class ThirdPersonInput : MonoBehaviour
     private InputAction reloadAction;
     private InputAction toggleFireModeAction;
     private InputAction coverAction;
+    private InputAction[] weaponSlotActions;
+    private bool suppressFireUntilReleased;
 
     private void Awake()
     {
@@ -62,6 +66,13 @@ public class ThirdPersonInput : MonoBehaviour
 
         coverAction = new InputAction("Cover", InputActionType.Button);
         coverAction.AddBinding("<Keyboard>/e");
+        weaponSlotActions = new InputAction[4];
+        for (int i = 0; i < weaponSlotActions.Length; i++)
+        {
+            weaponSlotActions[i] = new InputAction($"WeaponSlot{i + 1}", InputActionType.Button);
+            weaponSlotActions[i].AddBinding($"<Keyboard>/{i + 1}");
+            weaponSlotActions[i].AddBinding($"<Keyboard>/numpad{i + 1}");
+        }
     }
 
     private void OnEnable()
@@ -76,6 +87,7 @@ public class ThirdPersonInput : MonoBehaviour
         reloadAction.Enable();
         toggleFireModeAction.Enable();
         coverAction.Enable();
+        foreach (InputAction slot in weaponSlotActions) slot.Enable();
     }
 
     private void OnDisable()
@@ -90,10 +102,19 @@ public class ThirdPersonInput : MonoBehaviour
         reloadAction.Disable();
         toggleFireModeAction.Disable();
         coverAction.Disable();
+        foreach (InputAction slot in weaponSlotActions) slot.Disable();
+        WeaponSlotPressed = 0;
     }
 
     private void Update()
     {
+        if (Time.timeScale <= 0f)
+        {
+            Move = Look = Vector2.zero;
+            JumpPressed = SprintHeld = FreeLookHeld = AimHeld = ReloadPressed = ToggleFireModePressed = CoverPressed = false;
+            SuppressCombatInput();
+            return;
+        }
         Move = moveAction.ReadValue<Vector2>();
         Look = lookAction.ReadValue<Vector2>();
         JumpPressed = jumpAction.WasPressedThisFrame();
@@ -105,5 +126,36 @@ public class ThirdPersonInput : MonoBehaviour
         ReloadPressed = reloadAction.WasPressedThisFrame();
         ToggleFireModePressed = toggleFireModeAction.WasPressedThisFrame();
         CoverPressed = coverAction.WasPressedThisFrame();
+        WeaponSlotPressed = 0;
+        for (int i = 0; i < weaponSlotActions.Length; i++)
+            if (weaponSlotActions[i].WasPressedThisFrame()) WeaponSlotPressed = i + 1;
+        if (suppressFireUntilReleased)
+        {
+            FireHeld = FirePressed = false;
+            if (!fireAction.IsPressed()) suppressFireUntilReleased = false;
+        }
+    }
+
+    public void SuppressCombatInput()
+    {
+        suppressFireUntilReleased = true;
+        FireHeld = FirePressed = false;
+        WeaponSlotPressed = 0;
+    }
+
+    private void OnDestroy()
+    {
+        moveAction?.Dispose();
+        lookAction?.Dispose();
+        jumpAction?.Dispose();
+        sprintAction?.Dispose();
+        aimAction?.Dispose();
+        freeLookAction?.Dispose();
+        fireAction?.Dispose();
+        reloadAction?.Dispose();
+        toggleFireModeAction?.Dispose();
+        coverAction?.Dispose();
+        if (weaponSlotActions != null)
+            foreach (InputAction slot in weaponSlotActions) slot.Dispose();
     }
 }

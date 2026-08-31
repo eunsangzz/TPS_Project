@@ -125,6 +125,7 @@ public class EnemyAI : MonoBehaviour
         }
 
         SetupSharedReferences();
+        ApplyTypeState();
         ResolvePatrolAreas();
         PickNewPatrolTarget(true);
     }
@@ -474,6 +475,14 @@ public class EnemyAI : MonoBehaviour
 
         damageChaseEndTime = Time.time + chaseAfterDamageDuration;
         lastSeenTime = Time.time;
+
+        // Damage reveals the target but must not repeatedly interrupt a ranged windup.
+        if (enemyType == EnemyType.Ranged && state == State.Attack &&
+            perception.DistanceToPlayer() <= combat.GetAttackRange())
+        {
+            return;
+        }
+
         currentCover = null;
         nextRepathTime = 0f;
         agent.isStopped = false;

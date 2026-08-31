@@ -22,10 +22,18 @@ public class EnemyHealth : MonoBehaviour, IDamageable
     private bool isDead;
 
     public bool IsDead => isDead || currentHealth <= 0f;
+    public bool HasTakenDamage { get; private set; }
 
     private void Awake()
     {
         currentHealth = Mathf.Clamp(currentHealth, 0f, maxHealth);
+    }
+
+    private void Start()
+    {
+        EnemyHealthBar healthBar = GetComponent<EnemyHealthBar>();
+        if (healthBar == null) healthBar = gameObject.AddComponent<EnemyHealthBar>();
+        healthBar.Initialize(this);
     }
 
     private void Update()
@@ -54,6 +62,7 @@ public class EnemyHealth : MonoBehaviour, IDamageable
         if (dmg <= 0f) return;
 
         lastHitTime = Time.time;
+        HasTakenDamage = true;
         currentHealth = Mathf.Max(0f, currentHealth - dmg);
         Damaged?.Invoke(this, hitPoint, hitDirection);
 

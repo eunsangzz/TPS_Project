@@ -53,6 +53,15 @@ td:first-child { font-variant-numeric: tabular-nums; color: #65756d; }
 td:last-child { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 tbody tr:first-child td:first-child { color: #986d1c; font-weight: 750; }
 .guest-tag { display: inline-block; color: #65756d; font-size: 10px; margin-left: 10px; font-weight: 400; }
+.record-skills { margin-top: 9px; font-size: 12px; line-height: 1.65; color: #53685c; font-weight: 400; }
+.record-skills summary { cursor: pointer; width: fit-content; color: #176345; }
+.record-skills summary:focus-visible { outline: 2px solid #208c6a; outline-offset: 3px; }
+.record-skills ul, #best-skills ul { list-style: none; padding: 0; margin: 8px 0 0; }
+.record-skills li, #best-skills li { margin: 3px 0; overflow-wrap: anywhere; }
+.best-build { padding: 18px 0; border-bottom: 1px solid #d8dfdb; }
+.best-build h3 { font-size: 13px; font-weight: 600; margin: 0 0 10px; }
+#best-skills { font-size: 13px; line-height: 1.7; color: #53685c; }
+td { vertical-align: top; }
 .empty-state { min-height: 260px; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #7b8d82; text-align: center; }
 .empty-state svg { width: 40px; height: 40px; color: #83978a; margin-bottom: 12px; }
 .empty-state h3 { margin: 0; font-weight: 400; font-size: 14px; }

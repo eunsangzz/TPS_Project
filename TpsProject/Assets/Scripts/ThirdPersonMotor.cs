@@ -114,7 +114,8 @@ public class ThirdPersonMotor : MonoBehaviour
 
         currentMove = desiredMove;
 
-        if(freeLook)
+        // Keep the upper-body strike aligned with its damage cone while the legs can move.
+        if(freeLook || (TryGetComponent<PlayerMelee>(out var melee) && melee.IsAttacking))
         {
             return;
         }

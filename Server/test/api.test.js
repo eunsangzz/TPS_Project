@@ -73,7 +73,7 @@ test("PostgreSQL-backed API", async (t) => {
 
   await t.test("guest identity resumes, scores remain isolated, leaderboard is public", async () => {
     guest = (await request("/auth/guest", { method: "POST", body: { displayName: "Tester" } })).body;
-    await request("/scores", { method: "POST", token: guest.token, body: { score: 2000, userId: "user_demo" } });
+    await request("/scores", { method: "POST", token: guest.token, body: { score: 2000, userId: "user_demo", runId: "d".repeat(32), skills: [{ id: "HeavyStrike", level: 2 }] } });
     const resumed = await request("/auth/guest", { method: "POST", body: { resumeToken: guest.token } });
     assert.equal(resumed.body.user.id, guest.user.id);
     assert.equal((await request("/player-data", { token })).body.playerData.bestScore, 1000);
@@ -153,6 +153,7 @@ test("PostgreSQL-backed API", async (t) => {
     assert.equal(data.level, 3);
     assert.equal((await request("/player-data", { token: guest.token })).body.playerData.bestScore, 2000);
     assert.equal((await request("/leaderboard")).body.entries[0].bestScore, 2000);
+    assert.deepEqual((await request("/leaderboard")).body.entries[0].bestSkills, [{ id: "HeavyStrike", level: 2 }]);
     assert.equal((await request("/web/me", { headers: { Cookie: webCookie } })).body.playerData.bestScore, 350);
     const login = await request("/auth/login", { method: "POST", body: { username: "member_01", password: memberPassword } });
     assert.equal(login.status, 200);

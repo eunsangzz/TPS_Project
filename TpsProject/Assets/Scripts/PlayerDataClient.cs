@@ -118,6 +118,8 @@ public class PlayerDataClient : MonoBehaviour
         public int xp;
         public int coins;
         public int bestScore;
+        public ScoreSkillRecord[] bestSkills;
+        public string bestRunId;
         public string selectedWeapon;
         public string lastLoginAt;
         public string updatedAt;

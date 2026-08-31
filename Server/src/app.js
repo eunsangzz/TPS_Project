@@ -4,6 +4,7 @@ const path = require("node:path");
 const cookieParser = require("cookie-parser");
 const helmet = require("helmet");
 const { rateLimit } = require("express-rate-limit");
+const { parseScoreSkills } = require("./score-skills");
 
 function validName(value) {
   return typeof value === "string" && value.trim().length >= 1 && value.trim().length <= 32 && !/[<>\x00-\x1f\x7f]/.test(value);
@@ -153,7 +154,13 @@ function createApp(store, { authLimit = 30 } = {}) {
   });
   app.post("/scores", requireAuth, async (req, res) => {
     if (!isInteger(req.body?.score)) return res.status(400).json({ error: "score must be a non-negative 32-bit integer" });
-    res.json({ playerData: await store.saveScore(req.user.id, req.body.score) });
+    const skills = parseScoreSkills(req.body.skills);
+    // Unity JsonUtility serializes an unset legacy run ID as an empty string.
+    const runId = req.body.runId === "" ? null : req.body.runId ?? null;
+    if (skills === null || (runId !== null && (typeof runId !== "string" || !/^[a-f0-9]{32}$/.test(runId)))) {
+      return res.status(400).json({ error: "invalid skill records or runId" });
+    }
+    res.json({ playerData: await store.saveScore(req.user.id, req.body.score, skills, runId) });
   });
   app.get("/leaderboard", async (req, res) => {
     res.json({ entries: await store.leaderboard() });

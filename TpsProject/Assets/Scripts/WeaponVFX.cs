@@ -1,5 +1,4 @@
 using UnityEngine;
-using System.Collections;
 
 public class WeaponVFX : MonoBehaviour
 {
@@ -13,13 +12,19 @@ public class WeaponVFX : MonoBehaviour
     [SerializeField] private float hitEffectLife = 1.5f;
 
     [Header("Tracer")]
-    [SerializeField] private float tracerLife = 0.05f;
+    [SerializeField] private float tracerLife = 0.1f;
+    [SerializeField] private float tracerWidth = 0.045f;
+    [SerializeField] private Color tracerColor = new Color(0.25f, 0.95f, 1f, 1f);
 
     [Header("Bullet Hole")]
     [SerializeField] private GameObject bulletHolePrefab;
     [SerializeField] private float bulletHoleLife = 20f;
     [SerializeField] private float bulletHoleOffset = 0.002f;
     [SerializeField] private bool parentToHitObject = true;
+
+    private float tracerEndTime;
+    private float activeTracerLife;
+    private Color activeTracerColor;
 
     public void PlayMuzzleFlash()
     {
@@ -28,15 +33,67 @@ public class WeaponVFX : MonoBehaviour
 
     public void PlayTracer(Vector3 hitPoint)
     {
-        if (tracer == null || muzzle == null) return;
+        Vector3 origin = muzzle != null ? muzzle.position :
+            transform.position + Vector3.up * 1.2f + transform.forward * 0.5f;
+        PlayTracer(origin, hitPoint, tracerColor);
+    }
+
+    public void PlayTracer(Vector3 origin, Vector3 hitPoint, Color color)
+    {
+        EnsureTracer();
+        if (tracer == null) return;
 
         tracer.gameObject.SetActive(true);
+        tracer.enabled = true;
+        tracer.useWorldSpace = true;
         tracer.positionCount = 2;
-        tracer.SetPosition(0, muzzle.position);
+        tracer.SetPosition(0, origin);
         tracer.SetPosition(1, hitPoint);
+        activeTracerColor = color;
+        tracer.startColor = color;
+        tracer.endColor = color;
+        activeTracerLife = Mathf.Max(0.08f, tracerLife);
+        tracerEndTime = Time.time + activeTracerLife;
+    }
 
-        StopAllCoroutines();
-        StartCoroutine(HideTracerRoutine());
+    private void EnsureTracer()
+    {
+        if (tracer != null) return;
+
+        GameObject tracerObject = new GameObject("BulletTracer");
+        tracerObject.transform.SetParent(transform, false);
+        tracer = tracerObject.AddComponent<LineRenderer>();
+        tracer.sharedMaterial = Resources.Load<Material>("BulletTracer");
+        tracer.widthMultiplier = Mathf.Max(0.005f, tracerWidth);
+        tracer.numCapVertices = 2;
+        tracer.alignment = LineAlignment.View;
+        tracer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        tracer.receiveShadows = false;
+        tracer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        tracer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        tracer.enabled = false;
+    }
+
+    private void LateUpdate()
+    {
+        if (tracer == null || !tracer.enabled) return;
+
+        float remaining = tracerEndTime - Time.time;
+        if (remaining <= 0f)
+        {
+            tracer.enabled = false;
+            return;
+        }
+
+        Color color = activeTracerColor;
+        color.a *= Mathf.Clamp01(remaining / activeTracerLife);
+        tracer.startColor = color;
+        tracer.endColor = color;
+    }
+
+    private void OnDisable()
+    {
+        if (tracer != null) tracer.enabled = false;
     }
 
     public void PlayHitEffect(RaycastHit hit)
@@ -62,16 +119,6 @@ public class WeaponVFX : MonoBehaviour
 
         if (bulletHoleLife > 0f)
             Destroy(hole, bulletHoleLife);
-    }
-
-    private IEnumerator HideTracerRoutine()
-    {
-        yield return new WaitForSeconds(tracerLife);
-
-        if(tracer != null)
-        {
-            tracer.gameObject.SetActive(false);
-        }
     }
 
 }

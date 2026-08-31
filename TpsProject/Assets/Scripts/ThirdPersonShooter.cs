@@ -14,7 +14,7 @@ public class ThirdPersonShooter : MonoBehaviour
 
     [Header("Weapon")]
     [SerializeField] private WeaponData weaponData;
-    [SerializeField] private int startReserveAmmo = 90;
+    [SerializeField, Min(0)] private int ammoPerStage = 90;
     [SerializeField] private bool requireAimToShoot = false;
 
     [Header("Animator")]
@@ -25,12 +25,18 @@ public class ThirdPersonShooter : MonoBehaviour
     [SerializeField] private string isReloadingBoolParam = "";
 
     [SerializeField] private WeaponRuntime runtime = new WeaponRuntime();
+    private Coroutine reloadRoutine;
+    private PlayerLoadout loadout;
+    private PlayerSkills skills;
+    private int stageAmmoCapacity;
 
     public int AmmoInMag => runtime.AmmoInMag;
     public int ReserveAmmo => runtime.ReserveAmmo;
     public bool InfiniteReserveAmmo => runtime.InfiniteReserveAmmo;
     public bool IsReloading => runtime.IsReloading;
     public WeaponData.FireMode CurrentFireMode => runtime.CurrentFireMode;
+    public bool IsGunEquipped => loadout == null || loadout.IsGunEquipped;
+    public Camera ShooterCamera => shooterCamera;
 
     private void Awake()
     {
@@ -47,13 +53,24 @@ public class ThirdPersonShooter : MonoBehaviour
             return;
         }
 
-        runtime.Initialize(weaponData, startReserveAmmo, true);
+        skills = GetComponent<PlayerSkills>();
+        if (skills == null) skills = gameObject.AddComponent<PlayerSkills>();
+        runtime.Initialize(weaponData, 0, false);
+        ResetAmmoForStage();
+        if (weaponVFX == null) weaponVFX = gameObject.AddComponent<WeaponVFX>();
+        PlayerCrosshairUI crosshair = GetComponent<PlayerCrosshairUI>();
+        if (crosshair == null) crosshair = gameObject.AddComponent<PlayerCrosshairUI>();
+        crosshair.Initialize(this, shooterCamera, playerHealth);
+        loadout = GetComponent<PlayerLoadout>();
+        if (loadout == null) loadout = gameObject.AddComponent<PlayerLoadout>();
+        loadout.Initialize(this);
         PushAnimatorState();
     }
 
     private void Update()
     {
         if (input == null || shooterCamera == null) return;
+        if (!IsGunEquipped || Time.timeScale <= 0f) return;
         if (playerHealth != null && playerHealth.IsDead) return;
 
         if (input.ToggleFireModePressed) 
@@ -107,6 +124,7 @@ public class ThirdPersonShooter : MonoBehaviour
 
     private void TryShoot()
     {
+        if (!IsGunEquipped || Time.timeScale <= 0f || (playerHealth != null && playerHealth.IsDead)) return;
         if (!runtime.CanFire(Time.time)) return;
 
         runtime.SetNextFireTime(Time.time, weaponData.fireRate);
@@ -129,29 +147,7 @@ public class ThirdPersonShooter : MonoBehaviour
         Vector3 dir = ApplySpread(shooterCamera.transform.forward, spreadDeg);
         Ray ray = new Ray(shooterCamera.transform.position, dir);
 
-        Vector3 hitPoint = ray.origin + ray.direction * weaponData.range;
-
-        bool hitSomething = Physics.Raycast(
-            ray,
-            out RaycastHit hit,
-            weaponData.range,
-            weaponData.hitMask,
-            QueryTriggerInteraction.Ignore);
-
-        if (hitSomething)
-        {
-            hitPoint = hit.point;
-
-            var damageable = hit.collider.GetComponentInParent<IDamageable>();
-            if (damageable != null)
-                damageable.TakeDamage(weaponData.damage, hit.point, ray.direction);
-
-            if (weaponVFX != null)
-            {
-                weaponVFX.PlayHitEffect(hit);
-                weaponVFX.SpawnBulletHole(hit);
-            }
-        }
+        Vector3 hitPoint = TraceShot(ray);
 
         if (weaponVFX != null)
         {
@@ -178,8 +174,9 @@ public class ThirdPersonShooter : MonoBehaviour
 
     private void TryStartReload()
     {
+        if (!IsGunEquipped || Time.timeScale <= 0f || (playerHealth != null && playerHealth.IsDead)) return;
         if (!runtime.CanReload(weaponData)) return;
-        StartCoroutine(ReloadRoutine());
+        reloadRoutine = StartCoroutine(ReloadRoutine());
     }
 
     private IEnumerator ReloadRoutine()
@@ -193,8 +190,55 @@ public class ThirdPersonShooter : MonoBehaviour
         yield return new WaitForSeconds(weaponData.reloadTime);
 
         runtime.FinishReload(weaponData);
+        reloadRoutine = null;
         PushAnimatorState();
     }
+
+    private Vector3 TraceShot(Ray ray)
+    {
+        Vector3 end = ray.GetPoint(weaponData.range);
+        RaycastHit[] hits = Physics.RaycastAll(ray, weaponData.range, weaponData.hitMask, QueryTriggerInteraction.Ignore);
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        var targets = new System.Collections.Generic.HashSet<EnemyHealth>();
+        int limit = skills != null && skills.HasPiercing ? 2 : 1;
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider == null || hit.transform == transform || hit.transform.IsChildOf(transform)) continue;
+            EnemyHealth enemy = hit.collider.GetComponentInParent<EnemyHealth>();
+            if (enemy != null && (enemy.IsDead || !targets.Add(enemy))) continue;
+            float multiplier = (skills != null ? skills.GunDamageMultiplier : 1f) * (targets.Count > 1 ? 0.5f : 1f);
+            hit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(weaponData.damage * multiplier, hit.point, ray.direction);
+            if (weaponVFX != null)
+            {
+                weaponVFX.PlayHitEffect(hit);
+                weaponVFX.SpawnBulletHole(hit);
+            }
+            // Only living enemies can be penetrated, never walls or other scenery.
+            if (enemy == null || targets.Count >= limit) return hit.point;
+        }
+        return end;
+    }
+
+    public void CancelReload()
+    {
+        if (reloadRoutine != null) StopCoroutine(reloadRoutine);
+        reloadRoutine = null;
+        runtime.CancelReload();
+        PushAnimatorState();
+    }
+
+    public void ResetAmmoForStage()
+    {
+        if (weaponData == null) return;
+        CancelReload();
+        stageAmmoCapacity = ammoPerStage + (skills != null ? skills.ConsumeStageAmmoBonus() : 0);
+        runtime.ResetAmmo(weaponData, stageAmmoCapacity);
+        PushAnimatorState();
+    }
+
+    public void RecoverAmmo(int amount) => runtime.AddReserveAmmo(amount, stageAmmoCapacity);
+
+    private void OnDisable() => CancelReload();
 
 
     private Vector3 ApplySpread(Vector3 forward, float spreadDeg)
