@@ -1,0 +1,13 @@
+{
+  "name": "tps-project-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Simple Node.js API server for TPS Project.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}

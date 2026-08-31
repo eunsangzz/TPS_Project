@@ -1,7 +1,10 @@
 using UnityEngine;
+using System;
 
 public class PlayerHealth : MonoBehaviour, IDamageable
 {
+    public event Action<float> Damaged;
+
     [Header("Health")]
     [SerializeField] private float maxHealth = 100f;
     [SerializeField] private bool destroyOnDeath = false;
@@ -20,6 +23,7 @@ public class PlayerHealth : MonoBehaviour, IDamageable
     {
         CurrentHealth = maxHealth;
         if (animator == null) animator = GetComponentInChildren<Animator>();
+        PlayerDamageFlashUI.EnsureExists(this);
         ApplyAnimatorState();
     }
 
@@ -29,6 +33,7 @@ public class PlayerHealth : MonoBehaviour, IDamageable
         if (amount <= 0f) return;
 
         CurrentHealth = Mathf.Max(0f, CurrentHealth - amount);
+        Damaged?.Invoke(amount);
 
         if (animator != null && !string.IsNullOrEmpty(hitTrigger))
             animator.SetTrigger(hitTrigger);
