@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="TPS Project 플레이어 계정과 최고 점수, 전체 순위">
+  <meta name="theme-color" content="#151918">
+  <title>TPS Project | 플레이어 기록</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="/assets/lucide.js"></script>
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="TPS Project 홈"><i data-lucide="crosshair" aria-hidden="true"></i><span>TPS PROJECT</span></a>
+    <span class="connection" id="connection">연결 확인 중</span>
+  </header>
+  <main>
+    <div class="page-title"><div><p class="eyebrow">PLAYER RECORDS</p><h1>플레이어 기록</h1></div><span class="season-label">ALL TIME</span></div>
+    <div class="workspace">
+      <section class="account-column" aria-label="내 계정">
+        <div id="auth-panel">
+          <div class="tabs" role="tablist" aria-label="계정 접속">
+            <button id="login-tab" type="button" role="tab" aria-selected="true" aria-controls="auth-form">로그인</button>
+            <button id="register-tab" type="button" role="tab" aria-selected="false" aria-controls="auth-form" tabindex="-1">회원가입</button>
+          </div>
+          <h2 id="form-title">계정 로그인</h2>
+          <form id="auth-form" role="tabpanel" aria-labelledby="login-tab">
+            <div class="field"><label for="username">아이디<span id="username-rule" hidden>영문·숫자·밑줄, 3~24자</span></label><input id="username" name="username" autocomplete="username" maxlength="24" required autocapitalize="none" spellcheck="false"></div>
+            <div class="field" id="display-name-field" hidden><label for="display-name">닉네임<span>1~32자</span></label><input id="display-name" name="displayName" autocomplete="nickname" maxlength="32" disabled></div>
+            <div class="field"><label for="password">비밀번호<span id="password-rule" hidden>12~128자</span></label><div class="password-wrap"><input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" required><button type="button" id="toggle-password" class="icon-button" title="비밀번호 표시" aria-label="비밀번호 표시" aria-pressed="false"><i data-lucide="eye" aria-hidden="true"></i></button></div></div>
+            <div class="field" id="confirm-field" hidden><label for="confirm-password">비밀번호 확인</label><input id="confirm-password" name="confirmation" type="password" autocomplete="new-password" maxlength="128" disabled></div>
+            <button type="submit" class="primary-button" id="submit-button"><span id="submit-label">로그인</span><i data-lucide="arrow-right" aria-hidden="true"></i></button>
+          </form>
+        </div>
+        <div id="profile-panel" hidden>
+          <div class="profile-heading"><span class="avatar"><i data-lucide="user-round" aria-hidden="true"></i></span><div><p class="eyebrow">MY ACCOUNT</p><h2 id="display-name-value"></h2><p id="username-value" class="muted"></p></div></div>
+          <div class="personal-record"><p><i data-lucide="trophy" aria-hidden="true"></i>최고 점수</p><strong id="best-score">0</strong><span class="record-unit">POINTS</span></div>
+          <dl class="stats"><div><dt>전체 순위</dt><dd id="my-rank">기록 없음</dd></div><div><dt>레벨</dt><dd id="level">1</dd></div><div><dt>경험치</dt><dd id="xp">0</dd></div><div><dt>코인</dt><dd id="coins">0</dd></div><div><dt>선택 무기</dt><dd id="weapon">Rifle</dd></div></dl>
+          <button type="button" id="logout-button" class="text-button"><i data-lucide="log-out" aria-hidden="true"></i>로그아웃</button>
+        </div>
+        <p class="message" id="account-message" role="status" aria-live="polite"></p>
+      </section>
+      <section class="ranking-column" aria-labelledby="ranking-title">
+        <div class="section-heading"><div><p class="eyebrow">LEADERBOARD</p><h2 id="ranking-title">최고 점수 순위 <span class="top-ten">TOP 10</span></h2></div><button type="button" class="icon-button refresh-button" id="refresh-button" aria-label="점수 새로고침" title="점수 새로고침"><i data-lucide="refresh-cw" aria-hidden="true"></i></button></div>
+        <p id="ranking-message" class="message" role="status" aria-live="polite">순위를 불러오는 중입니다.</p>
+        <table><caption class="sr-only">전체 플레이어 최고 점수 상위 10명</caption><thead><tr><th scope="col">순위</th><th scope="col">플레이어</th><th scope="col">최고 점수</th></tr></thead><tbody id="ranking-body"></tbody></table>
+        <div id="empty-ranking" class="empty-state" hidden><i data-lucide="trophy" aria-hidden="true"></i><h3>아직 등록된 점수가 없습니다</h3></div>
+        <div class="ranking-footer"><span>최고 점수 기준</span><span id="updated-at"></span></div>
+      </section>
+    </div>
+  </main>
+  <footer class="site-footer"><span>TPS PROJECT</span><span>PLAYER PORTAL</span></footer>
+</body>
+</html>

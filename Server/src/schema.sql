@@ -19,3 +19,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions (expires_at);
+
+-- Additive migration: existing guest and demo records keep their IDs and scores.
+CREATE TABLE IF NOT EXISTS accounts (
+    username VARCHAR(24) PRIMARY KEY,
+    user_id TEXT NOT NULL UNIQUE REFERENCES players(user_id) ON DELETE CASCADE,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

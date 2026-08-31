@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { hashPassword, verifyPassword } = require("./passwords");
 
 function tokenHash(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -20,6 +21,7 @@ class PlayerStore {
   async initialize() {
     await this.db.query(await fs.readFile(path.join(__dirname, "schema.sql"), "utf8"));
     await this.db.query("DELETE FROM sessions WHERE expires_at <= NOW()");
+    this.dummyPasswordHash = await hashPassword(crypto.randomBytes(32).toString("hex"));
   }
 
   async createSession({ id, displayName, isGuest }) {
@@ -39,16 +41,62 @@ class PlayerStore {
 
   async authenticate(token) {
     const { rows } = await this.db.query(
-      `SELECT p.user_id, p.display_name, p.is_guest FROM sessions s
+      `SELECT p.user_id, p.display_name, p.is_guest, a.username FROM sessions s
        JOIN players p ON p.user_id = s.user_id
+       LEFT JOIN accounts a ON a.user_id = p.user_id
        WHERE s.token_hash = $1 AND s.expires_at > NOW()`,
       [tokenHash(token)],
     );
     if (!rows[0]) return null;
     return {
-      id: rows[0].user_id, username: rows[0].is_guest ? rows[0].user_id : "player",
+      id: rows[0].user_id, username: rows[0].username || (rows[0].is_guest ? rows[0].user_id : "player"),
       displayName: rows[0].display_name, isGuest: rows[0].is_guest,
     };
+  }
+
+  async register(username, password, displayName) {
+    const passwordHash = await hashPassword(password);
+    const id = `user_${crypto.randomUUID()}`;
+    // A single statement rolls back the player insert if a concurrent signup wins.
+    await this.db.query(
+      `WITH new_player AS (
+         INSERT INTO players (user_id, display_name, is_guest, coins)
+         VALUES ($1, $2, FALSE, 100) RETURNING user_id
+       ) INSERT INTO accounts (username, user_id, password_hash)
+         SELECT $3, user_id, $4 FROM new_player`,
+      [id, displayName, username, passwordHash],
+    );
+    return this.createSession({ id, displayName, isGuest: false });
+  }
+
+  async login(username, password) {
+    if (username === "player") {
+      const expected = crypto.createHash("sha256").update(process.env.DEMO_PASSWORD || "1234").digest();
+      const supplied = crypto.createHash("sha256").update(password).digest();
+      if (!crypto.timingSafeEqual(expected, supplied)) return null;
+      return this.createSession({ id: "user_demo", displayName: "Player", isGuest: false });
+    }
+    const { rows } = await this.db.query(
+      "SELECT a.password_hash, p.user_id, p.display_name FROM accounts a JOIN players p ON p.user_id = a.user_id WHERE a.username = $1",
+      [username],
+    );
+    const matches = await verifyPassword(password, rows[0]?.password_hash || this.dummyPasswordHash);
+    if (!rows[0] || !matches) return null;
+    return this.createSession({ id: rows[0].user_id, displayName: rows[0].display_name, isGuest: false });
+  }
+
+  async revokeSession(token) {
+    await this.db.query("DELETE FROM sessions WHERE token_hash = $1", [tokenHash(token)]);
+  }
+
+  async getRank(userId) {
+    const { rows } = await this.db.query(
+      `SELECT rank FROM (
+         SELECT user_id, ROW_NUMBER() OVER (ORDER BY best_score DESC, best_score_at ASC, user_id ASC) AS rank
+         FROM players WHERE best_score > 0
+       ) ranked WHERE user_id = $1`, [userId],
+    );
+    return rows[0] ? Number(rows[0].rank) : null;
   }
 
   async getPlayer(userId) {

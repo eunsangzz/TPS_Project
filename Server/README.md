@@ -71,8 +71,26 @@ Free plan limitations: https://render.com/docs/free
 
 ## Identity and Security Limits
 
+- The browser portal is served at `/` on the same Render web service. It includes
+  registration, login, logout, personal best, personal rank and the public top ten.
+- New accounts register with a unique case-insensitive username (3-24 letters,
+  digits or underscores), a display name (1-32 characters) and a password
+  (12-128 characters). Passwords use salted asynchronous scrypt hashes, never
+  plaintext. The accounts table is added without resetting existing scores.
+- Register in the browser, then enter the same username/password in Unity.
+  `POST /auth/register` and `/auth/login` return bearer tokens for native clients.
+- Browser endpoints `/web/auth/register`, `/web/auth/login`, `/web/auth/logout`
+  use an HttpOnly, SameSite=Strict cookie (Secure over HTTPS).
+  They require same-origin JSON requests. `/web/me` returns the profile and rank,
+  but never returns a token or password hash. Browser tokens are not in localStorage.
+- Authentication requests are limited to 30 per IP per 15 minutes per server
+  process. Multiple server replicas need a shared rate-limit store. The Express
+  proxy configuration assumes one trusted reverse proxy, as used for this service.
+- Email verification, password recovery, MFA and conversion of guest accounts
+  into member accounts are not implemented. Keep your password; use a distinct
+  password for this development project.
 - `player` / `1234` is still a shared demonstration account. Everyone using it
-  shares one record; this is not a registration system. Set DEMO_PASSWORD to
+  shares one record; registered users get separate records. Set DEMO_PASSWORD to
   change the demo password (and enter that password in Unity).
 - Guests get separate records. Unity stores a guest resume token on that device;
   `CONTINUE AS GUEST` reuses the identity. `NEW GUEST` starts a different identity.
@@ -97,6 +115,11 @@ Tests run the actual SQL and HTTP endpoints against PGlite (an embedded PostgreS
 engine) in a temporary directory, including closing/reopening the DB. This checks
 persistence, isolation, retries, concurrent records, top-ten ordering and expiry.
 It does not validate your Render credentials, network or TLS configuration.
+
+For isolated browser testing without touching Render data, run `npm.cmd run preview`
+and open `http://127.0.0.1:3100`. This uses an explicitly local PGlite test database
+under ignored `Server/data/web-preview`; it is not the production server or a
+fallback for a missing DATABASE_URL. Change PREVIEW_PORT if 3100 is occupied.
 
 ## Test
 
