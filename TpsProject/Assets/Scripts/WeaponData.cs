@@ -9,12 +9,12 @@ public class WeaponData : ScriptableObject
     public float damage = 20f;
     public float fireRate = 10f;
     public float range = 200f;
+    [Min(1)] public int pelletCount = 1;
     public LayerMask hitMask = ~0;
 
     [Header("Ammo")]
     public int magazineSize = 30;
     public float reloadTime = 2f;
-    public bool autoReloadWhenEmpty = true;
 
     [Header("Spread")]
     public float hipSpread = 2.5f;
@@ -23,4 +23,8 @@ public class WeaponData : ScriptableObject
 
     [Header("Fire Mode")]
     public FireMode fireMode = FireMode.Auto;
+
+    [Header("Audio")]
+    public AudioClip fireClip;
+    public AudioClip reloadClip;
 }

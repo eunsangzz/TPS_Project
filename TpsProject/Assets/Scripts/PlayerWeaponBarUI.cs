@@ -13,6 +13,8 @@ public class PlayerWeaponBarUI : MonoBehaviour
     private Text status;
     private readonly Image[] slots = new Image[4];
     private readonly Image[] accents = new Image[4];
+    private readonly PlayerWeaponIcon[] icons = new PlayerWeaponIcon[4];
+    private readonly Text[] slotNames = new Text[4];
     private Image cooldownFill;
     private string lastAmmo;
     private string lastStatus;
@@ -44,13 +46,16 @@ public class PlayerWeaponBarUI : MonoBehaviour
             slots[i] = MakeImage($"Slot{i + 1}", bar, new Vector2(-126f + i * 84f, 36f), new Vector2(76f, 72f), Color.black);
             MakeText("Key", slots[i].transform, new Vector2(-26f, 22f), new Vector2(20f, 16f), 12).text = (i + 1).ToString();
             var icon = new GameObject("Icon", typeof(RectTransform), typeof(PlayerWeaponIcon)).GetComponent<PlayerWeaponIcon>();
+            icons[i] = icon;
             icon.transform.SetParent(slots[i].transform, false);
             icon.rectTransform.sizeDelta = new Vector2(44f, 28f);
             icon.rectTransform.anchoredPosition = new Vector2(0f, 3f);
             icon.Slot = i + 1;
             icon.raycastTarget = false;
-            icon.color = i < 2 ? Color.white : new Color(0.34f, 0.37f, 0.4f);
-            MakeText("Name", slots[i].transform, new Vector2(0f, -22f), new Vector2(72f, 18f), 12).text = i == 0 ? "MELEE" : i == 1 ? "RIFLE" : "-";
+            icon.color = Color.white;
+            slotNames[i] = MakeText("Name", slots[i].transform, new Vector2(0f, -22f), new Vector2(72f, 18f), 11);
+            slotNames[i].text =
+                i == 0 ? "MELEE" : i == 1 ? "RIFLE" : i == 2 ? "SHOTGUN" : "SNIPER";
             accents[i] = MakeImage("Selection", slots[i].transform, new Vector2(0f, -35f), new Vector2(76f, 3f), Color.clear);
         }
         cooldownFill = MakeImage("MeleeCooldown", slots[0].transform, new Vector2(0f, 35f), new Vector2(76f, 2f), new Color(1f, 0.7f, 0.2f));
@@ -71,12 +76,18 @@ public class PlayerWeaponBarUI : MonoBehaviour
         for (int i = 0; i < 4; i++)
         {
             bool active = loadout.SelectedSlot == i + 1;
+            bool unlocked = loadout.IsSlotUnlocked(i + 1);
             slots[i].color = active ? new Color(0.11f, 0.16f, 0.18f, 0.97f) : new Color(0.025f, 0.03f, 0.04f, 0.85f);
-            accents[i].color = active ? selected : new Color(0.3f, 0.33f, 0.36f, 0.65f);
+            accents[i].color = active ? selected : unlocked ? new Color(0.3f, 0.33f, 0.36f, 0.65f) : Color.clear;
+            icons[i].color = unlocked ? Color.white : new Color(0.25f, 0.27f, 0.29f);
+            slotNames[i].text = i == 0 ? "MELEE" : !unlocked ? "LOCKED" : i == 1 ? "RIFLE" : i == 2 ? "SHOTGUN" : "SNIPER";
+            slotNames[i].color = unlocked ? Color.white : new Color(0.42f, 0.44f, 0.46f);
         }
         string ammoLabel = loadout.IsGunEquipped ? $"{shooter.AmmoInMag} / {shooter.ReserveAmmo}" : "MELEE";
         string statusLabel = loadout.IsMeleeEquipped ? (loadout.Melee.CooldownRemaining > 0f ? "RECOVERING" : "READY") :
             shooter.IsReloading ? "RELOADING" : shooter.AmmoInMag + shooter.ReserveAmmo == 0 ? "EMPTY" :
+            loadout.IsShotgunEquipped ? "SHOTGUN / 4 PELLETS" :
+            loadout.IsSniperEquipped ? "SNIPER / SINGLE / 6X" :
             shooter.CurrentFireMode == WeaponData.FireMode.Auto ? "AUTO" : "SINGLE";
         if (lastAmmo != ammoLabel) { ammo.text = ammoLabel; lastAmmo = ammoLabel; }
         if (lastStatus != statusLabel) { status.text = statusLabel; lastStatus = statusLabel; }

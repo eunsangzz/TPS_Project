@@ -131,8 +131,19 @@ public class StageManager : MonoBehaviour
     {
         if (enemyPrefabs == null || enemyPrefabs.Length == 0) return null;
 
-        if (enemyPrefabs.Length == 1) return enemyPrefabs[0];
-        return enemyPrefabs[Random.Range(0, enemyPrefabs.Length)];
+        bool meleeOnly = currentStage == 1;
+        int eligibleCount = 0;
+        foreach (EnemyAI candidate in enemyPrefabs)
+            if (candidate != null && (!meleeOnly || candidate.enemyType == EnemyType.Melee)) eligibleCount++;
+        if (eligibleCount == 0) return null;
+
+        int selected = Random.Range(0, eligibleCount);
+        foreach (EnemyAI candidate in enemyPrefabs)
+        {
+            if (candidate == null || (meleeOnly && candidate.enemyType != EnemyType.Melee)) continue;
+            if (selected-- == 0) return candidate;
+        }
+        return null;
     }
 
     private GameObject PickEnemyPrefabObject()
@@ -143,8 +154,19 @@ public class StageManager : MonoBehaviour
         GameObject[] prefabObjects = GetEnemyPrefabObjects();
         if (prefabObjects == null || prefabObjects.Length == 0) return null;
 
-        if (prefabObjects.Length == 1) return prefabObjects[0];
-        return prefabObjects[Random.Range(0, prefabObjects.Length)];
+        bool meleeOnly = currentStage == 1;
+        int eligibleCount = 0;
+        foreach (GameObject candidate in prefabObjects)
+            if (candidate != null && (!meleeOnly || InferEnemyType(candidate) == EnemyType.Melee)) eligibleCount++;
+        if (eligibleCount == 0) return null;
+
+        int selected = Random.Range(0, eligibleCount);
+        foreach (GameObject candidate in prefabObjects)
+        {
+            if (candidate == null || (meleeOnly && InferEnemyType(candidate) != EnemyType.Melee)) continue;
+            if (selected-- == 0) return candidate;
+        }
+        return null;
     }
 
     private GameObject[] GetEnemyPrefabObjects()
@@ -172,7 +194,7 @@ public class StageManager : MonoBehaviour
         NavMeshAgent agent = EnsureComponent<NavMeshAgent>(enemyObject);
         agent.radius = 0.5f;
         agent.height = 2f;
-        agent.speed = enemyType == EnemyType.Ranged ? 2.2f : 3.6f;
+        agent.speed = enemyType == EnemyType.Ranged ? 2.2f : EnemyAI.DefaultMeleeMoveSpeed;
         agent.angularSpeed = 120f;
         agent.acceleration = 8f;
         agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
@@ -188,6 +210,8 @@ public class StageManager : MonoBehaviour
 
         EnemyAI enemy = EnsureComponent<EnemyAI>(enemyObject);
         enemy.enemyType = enemyType;
+        enemy.meleeMoveSpeed = EnemyAI.DefaultMeleeMoveSpeed;
+        enemy.rangedMoveSpeed = 2.2f;
         enemy.head = enemyObject.transform;
         enemy.modelRoot = enemyObject.transform;
         enemy.health = health;
@@ -242,6 +266,7 @@ public class StageManager : MonoBehaviour
         enemy.patrolAreas = patrolAreas;
         enemy.loseSightTime = 9999f;
         enemy.repathInterval = 0.15f;
+        enemy.meleeMoveSpeed = EnemyAI.DefaultMeleeMoveSpeed;
 
         EnemyPerception perception = enemy.GetComponent<EnemyPerception>();
         if (perception != null)

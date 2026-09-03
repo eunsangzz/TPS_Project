@@ -51,7 +51,6 @@ public static class PlayerWeaponsRegression
             UnityEngine.Object.DestroyImmediate(gun.GetComponent<Collider>());
             data = ScriptableObject.CreateInstance<WeaponData>();
             data.magazineSize = 30;
-            data.autoReloadWhenEmpty = false;
             shooter = player.GetComponent<ThirdPersonShooter>();
             Set(shooter, "weaponData", data);
             Set(shooter, "shooterCamera", camera);
@@ -59,8 +58,18 @@ public static class PlayerWeaponsRegression
             loadout = player.GetComponent<PlayerLoadout>();
             melee = player.GetComponent<PlayerMelee>();
             runtime = (WeaponRuntime)Get(shooter, "runtime");
-            Expect(loadout != null && melee != null && loadout.SelectedSlot == 2, "Automatic loadout setup failed.");
+            Expect(loadout != null && melee != null && loadout.SelectedSlot == 1, "New run did not start with melee selected.");
+            Expect(!gun.GetComponent<Renderer>().enabled && !loadout.TrySelectSlot(2) && !loadout.TrySelectSlot(3),
+                "A ranged weapon was usable before its stage reward.");
+            Expect(loadout.UnlockWeapon(2) && loadout.IsRifleEquipped && gun.GetComponent<Renderer>().enabled,
+                "Rifle reward did not unlock, equip, or show the shared model.");
             Expect(shooter.AmmoInMag == 30 && shooter.ReserveAmmo == 60 && !shooter.InfiniteReserveAmmo, "Starting ammo is not 90 total.");
+            for (int i = 0; i < 6; i++) runtime.ConsumeAmmo();
+            runtime.StartReload();
+            runtime.FinishReload(data);
+            Expect(runtime.AmmoInMag == 30 && runtime.ReserveAmmo == 30,
+                "Partial rifle magazine was topped up instead of being replaced (24/60 should become 30/30).");
+            shooter.ResetAmmoForStage();
             int shots = 0;
             while (runtime.CanFire(999f))
             {
@@ -80,7 +89,24 @@ public static class PlayerWeaponsRegression
             loadout.TrySelectSlot(1);
             Expect(!runtime.IsReloading && shooter.AmmoInMag == 29 && shooter.ReserveAmmo == 60, "Weapon switch did not cancel reload cleanly.");
             Expect(!gun.GetComponent<Renderer>().enabled, "Rifle remains visible in melee mode.");
-            Expect(!loadout.TrySelectSlot(3) && !loadout.TrySelectSlot(4) && loadout.SelectedSlot == 1, "Empty slots changed weapons.");
+            Expect(!loadout.TrySelectSlot(3), "Shotgun was selectable before being unlocked.");
+            Expect(loadout.UnlockWeapon(3) && loadout.IsShotgunEquipped, "Slot 3 did not unlock the shotgun.");
+            Expect(gun.GetComponent<Renderer>().enabled, "Shotgun did not reuse the rifle model.");
+            WeaponData shotgunData = (WeaponData)Get(shooter, "shotgunData");
+            Expect(shotgunData.pelletCount == 4 && shotgunData.fireMode == WeaponData.FireMode.Single,
+                "Shotgun is not configured for four single-fire pellets.");
+            Expect(shooter.AmmoInMag == 8 && shooter.ReserveAmmo == 24, "Shotgun ammo is not independent from rifle ammo.");
+            Invoke(shooter, "ShootOnce");
+            Expect(shooter.AmmoInMag == 7, "One shotgun blast did not consume exactly one shell.");
+            Expect(player.GetComponentsInChildren<LineRenderer>().Length == 4,
+                "Shotgun blast did not create four visible pellet tracers.");
+            WeaponRuntime shotgunRuntime = (WeaponRuntime)Get(shooter, "shotgunRuntime");
+            shotgunRuntime.StartReload();
+            shotgunRuntime.FinishReload(shotgunData);
+            Expect(shotgunRuntime.AmmoInMag == 8 && shotgunRuntime.ReserveAmmo == 16,
+                "Shotgun did not replace the partial magazine as a whole unit.");
+            loadout.TrySelectSlot(1);
+            Expect(!loadout.TrySelectSlot(4) && loadout.SelectedSlot == 1, "Empty slot 4 changed weapons.");
             Invoke(shooter, "TryShoot");
             Expect(shooter.AmmoInMag == 29, "Gun fires while melee is selected.");
             shooter.ResetAmmoForStage();
@@ -138,7 +164,7 @@ public static class PlayerWeaponsRegression
             Expect(!loadout.TrySelectSlot(2) && !melee.TryAttack(), "Dead player can attack or switch.");
             Invoke(player.GetComponent<PlayerWeaponBarUI>(), "LateUpdate");
             Expect(!player.transform.Find("WeaponBarCanvas").GetComponent<Canvas>().enabled, "Dead player HUD stays visible.");
-            Debug.Log("[PlayerWeaponsRegression] PASS: finite 90 rounds, refill, reload cancellation, switching, numeric bindings, melee arc/range/walls/deduplication/cooldown, pause/death, and three rendered viewports.");
+            Debug.Log("[PlayerWeaponsRegression] PASS: full-magazine replacement reloads, melee-only start, ranged unlocks, rifle and four-pellet shotgun ammo/fire/VFX, switching, melee combat, pause/death, and three rendered viewports.");
             EditorApplication.Exit(0);
         }
         catch (Exception exception)

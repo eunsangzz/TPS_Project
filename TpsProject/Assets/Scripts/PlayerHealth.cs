@@ -19,10 +19,12 @@ public class PlayerHealth : MonoBehaviour, IDamageable
     public float CurrentHealth { get; private set; }
     public float MaxHealth => maxHealth;
     public bool IsDead { get; private set; }
+    private PlayerDodge dodge;
 
     private void Awake()
     {
         CurrentHealth = maxHealth;
+        dodge = GetComponent<PlayerDodge>();
         if (animator == null) animator = GetComponentInChildren<Animator>();
         PlayerDamageFlashUI.EnsureExists(this);
         ApplyAnimatorState();
@@ -32,6 +34,8 @@ public class PlayerHealth : MonoBehaviour, IDamageable
     {
         if (IsDead) return;
         if (amount <= 0f) return;
+        if (dodge == null) dodge = GetComponent<PlayerDodge>();
+        if (dodge != null && dodge.IsInvulnerable) return;
 
         CurrentHealth = Mathf.Max(0f, CurrentHealth - amount);
         Damaged?.Invoke(amount);
@@ -51,6 +55,7 @@ public class PlayerHealth : MonoBehaviour, IDamageable
     {
         if (IsDead) return;
         IsDead = true;
+        dodge?.Cancel();
         Died?.Invoke();
 
         ApplyAnimatorState();

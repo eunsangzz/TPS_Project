@@ -25,11 +25,13 @@ public class PlayerMelee : MonoBehaviour
     private Quaternion gripRotation;
     private PlayerSkills skills;
     private readonly HashSet<EnemyHealth> hitEnemies = new HashSet<EnemyHealth>();
+    private int attackSequence;
 
     public bool IsAttacking => pendingHit || Time.time < attackStartTime + PlayerMeleeAnimation.Duration;
     public bool IsEquipped => isActiveAndEnabled && loadout != null && loadout.IsMeleeEquipped && loadout.IsAlive && loadout.isActiveAndEnabled;
     public float CooldownRemaining => Mathf.Max(0f, nextAttackTime - Time.time);
     public float CooldownDuration => Mathf.Max(cooldown, PlayerMeleeAnimation.Duration);
+    public int AttackSequence => attackSequence;
 
     public void Initialize(PlayerLoadout owner, Camera camera)
     {
@@ -52,6 +54,7 @@ public class PlayerMelee : MonoBehaviour
         if (!isActiveAndEnabled || loadout == null || !loadout.CanAct || !loadout.IsMeleeEquipped || Time.time < nextAttackTime)
             return false;
         attackDirection = ViewDirection();
+        attackSequence++;
         attackStartTime = Time.time;
         nextAttackTime = Time.time + Mathf.Max(cooldown, PlayerMeleeAnimation.Duration);
         pendingHit = true;

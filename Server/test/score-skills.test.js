@@ -43,7 +43,7 @@ test("score builds migrate and remain paired with their run", async (t) => {
   ]) assert.deepEqual((await save(body)).body.playerData.bestSkills, richer);
 
   const badSkills = [null, {}, [null], [{ id: "<script>", level: 1 }], [{ id: "PowerRounds", level: 4 }],
-    [{ id: "PiercingRounds", level: 2 }], [{ id: "FirstAid", level: 1000000 }],
+    [{ id: "PiercingRounds", level: 2 }], [{ id: "SniperUnlock", level: 2 }], [{ id: "FirstAid", level: 1000000 }],
     [{ id: "HeavyStrike", level: "1" }], [{ id: "HeavyStrike", level: 0 }],
     [{ id: "HeavyStrike", level: 1.5 }], [first[0], first[0]], Array(10).fill(first[0])];
   for (const skills of badSkills) assert.equal((await save({ score: 1000, runId: runA, skills })).status, 400);
@@ -63,7 +63,7 @@ test("score builds migrate and remain paired with their run", async (t) => {
   assert.deepEqual(entries.entries[0].bestSkills, best.bestSkills);
   assert.equal(entries.entries[0].bestRunId, undefined);
 
-  const bonus = [{ id: "FirstAid", level: 2 }, { id: "Supply", level: 1 }];
+  const bonus = [{ id: "FirstAid", level: 2 }, { id: "RifleUnlock", level: 1 }, { id: "SniperUnlock", level: 1 }, { id: "Supply", level: 1 }];
   assert.deepEqual((await save({ score: 4000, runId: runA, skills: bonus })).body.playerData.bestSkills, bonus);
   const oldClient = (await save({ score: 5000 })).body.playerData;
   assert.deepEqual(oldClient.bestSkills, []);

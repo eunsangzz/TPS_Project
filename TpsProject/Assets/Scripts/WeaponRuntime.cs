@@ -63,12 +63,13 @@ public class WeaponRuntime
 
     public void FinishReload(WeaponData data)
     {
-        int need = data.magazineSize - ammoInMag;
-        int take = infiniteReserveAmmo ? need : Mathf.Min(need, reserveAmmo);
+        int magazineSize = Mathf.Clamp(data.magazineSize, 1, 999);
+        int replacementRounds = infiniteReserveAmmo ? magazineSize : Mathf.Min(magazineSize, reserveAmmo);
 
-        ammoInMag += take;
+        // Tactical magazine swap: rounds left in the removed magazine are discarded.
+        ammoInMag = replacementRounds;
         if (!infiniteReserveAmmo)
-            reserveAmmo -= take;
+            reserveAmmo -= replacementRounds;
         isReloading = false;
     }
 

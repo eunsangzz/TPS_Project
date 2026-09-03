@@ -4,7 +4,7 @@ using UnityEngine;
 public class CoverController : MonoBehaviour
 {
     [Header("Input")]
-    public KeyCode toggleCoverKey = KeyCode.E;
+    public KeyCode toggleCoverKey = KeyCode.C;
 
     [Header("Movement Mode")]
     public bool useCharacterController = true;
@@ -60,6 +60,7 @@ public class CoverController : MonoBehaviour
 
     void Update()
     {
+        if (TryGetComponent<PlayerDodge>(out var dodge) && dodge.IsDodging) return;
         if (!InCover)
         {
             Vector3 dir = GetDetectDirection();
@@ -161,16 +162,16 @@ public class CoverController : MonoBehaviour
     {
         Vector3 pos = GetPosition();
 
-        Vector3 toWall = coverPointAtEnter - pos; // ÇÃ·¹ÀÌ¾îÀ§Ä¡ ºÎÅÍ º®±îÁö
+        Vector3 toWall = coverPointAtEnter - pos; // í”Œë ˆì´ì–´ìœ„ì¹˜ ë¶€í„° ë²½ê¹Œì§€
         toWall.y = 0f;
 
-        float alongWallNormal = Vector3.Dot(toWall, -coverNormal); // º®ÆÄ°íµë È®ÀÎ
+        float alongWallNormal = Vector3.Dot(toWall, -coverNormal); // ë²½íŒŒê³ ë“¬ í™•ì¸
 
-        float desired = detector.coverOffset + 0.05f; //º®¿¡¼­ ¶³¾îÁú°Å¸®
+        float desired = detector.coverOffset + 0.05f; //ë²½ì—ì„œ ë–¨ì–´ì§ˆê±°ë¦¬
 
-        float delta = (alongWallNormal - desired); // ÇöÀç°Å¸® ÀÌµ¿·®
+        float delta = (alongWallNormal - desired); // í˜„ì¬ê±°ë¦¬ ì´ë™ëŸ‰
 
-        Vector3 correction = (-coverNormal) * delta; // delta°ª¿¡ µû¸® º®À¸·Î ´ç±â°í ¹Ğ¾î³¿
+        Vector3 correction = (-coverNormal) * delta; // deltaê°’ì— ë”°ë¦¬ ë²½ìœ¼ë¡œ ë‹¹ê¸°ê³  ë°€ì–´ëƒ„
 
         correction.y = 0f;
 

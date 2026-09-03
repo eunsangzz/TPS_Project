@@ -2490,7 +2490,7 @@ MonoBehaviour:
   aimOffset: {x: 0.45, y: 0.1, z: 0}
   offsetSmooth: 10
   scopeDoubleClickWindow: 0.25
-  zoomMultiplier: 4
+  zoomMultiplier: 2
   zoomSmooth: 12
   scopedSensitivityMultiplier: 0.35
   shoulderSensitivityMultiplier: 0.7

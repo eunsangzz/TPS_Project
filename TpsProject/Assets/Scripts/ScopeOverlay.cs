@@ -42,7 +42,8 @@ public class ScopeOverlay : MonoBehaviour
         if (thirdPersonCamera == null) return;
 
         float target = thirdPersonCamera.IsScoped ? 1f : 0f;
-        currentAlpha = Mathf.Lerp(currentAlpha, target, Time.deltaTime * fadeSpeed);
+        currentAlpha = thirdPersonCamera.IsAimSuppressed || !thirdPersonCamera.CanUseScope
+            ? 0f : Mathf.Lerp(currentAlpha, target, Time.deltaTime * fadeSpeed);
 
         SetRawAlpha(currentAlpha);
     }
@@ -89,7 +90,7 @@ public class ScopeOverlay : MonoBehaviour
         Color ring = new Color(0f, 0f, 0f, 1f);
         Color cross = new Color(0f, 0f, 0f, crosshairAlpha);
 
-        // ÇÈ¼¿ Ã¤¿ì±â
+        // í”½ì…€ ì±„ìš°ê¸°
         for (int y = 0; y < h; y++)
         {
             for (int x = 0; x < w; x++)
@@ -98,24 +99,24 @@ public class ScopeOverlay : MonoBehaviour
                 float dy = y - center.y;
                 float dist = Mathf.Sqrt(dx * dx + dy * dy);
 
-                // ¿ø ¾ÈÀº Åõ¸í
+                // ì› ì•ˆì€ íˆ¬ëª…
                 Color c = (dist <= radiusPx) ? clear : outside;
 
-                // ¸µ(Å×µÎ¸®)
+                // ë§(í…Œë‘ë¦¬)
                 if (Mathf.Abs(dist - radiusPx) <= ringThickness)
                     c = ring;
 
-                // ½ÊÀÚ¼±(¿ø ¾È¿¡¸¸)
+                // ì‹­ìžì„ (ì› ì•ˆì—ë§Œ)
                 if (dist <= radiusPx)
                 {
-                    // ¼¼·Î¼±
+                    // ì„¸ë¡œì„ 
                     if (Mathf.Abs(dx) <= crosshairThickness)
                         c = cross;
-                    // °¡·Î¼±
+                    // ê°€ë¡œì„ 
                     if (Mathf.Abs(dy) <= crosshairThickness)
                         c = cross;
 
-                    // Áß¾Ó Á¡(Á¶±Ý ÁøÇÏ°Ô)
+                    // ì¤‘ì•™ ì (ì¡°ê¸ˆ ì§„í•˜ê²Œ)
                     if (Mathf.Abs(dx) <= crosshairThickness + 1 && Mathf.Abs(dy) <= crosshairThickness + 1)
                         c = new Color(0f, 0f, 0f, 1f);
                 }

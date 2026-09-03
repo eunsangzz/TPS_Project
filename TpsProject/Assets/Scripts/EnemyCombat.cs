@@ -14,6 +14,8 @@ public class EnemyCombat : MonoBehaviour
     public float meleeRange = 1.2f;
     public float meleeDamage = 10f;
     public float meleeAttackRate = 1.5f;
+    [Min(0f)] public float meleeWindup = 0.35f;
+    [Min(0f)] public float meleeHitRangeGrace = 0.25f;
 
     [Header("Ranged")]
     public float rangedRange = 18f;
@@ -42,6 +44,8 @@ public class EnemyCombat : MonoBehaviour
     public float debugRayTime = 0.15f;
 
     private float nextAttackTime;
+    private bool meleeAttackPending;
+    private float pendingMeleeHitTime;
     private bool rangedAttackPending;
     private float pendingFireTime;
     private EnemyHealth health;
@@ -55,15 +59,23 @@ public class EnemyCombat : MonoBehaviour
 
     private void Update()
     {
-        if (enemyType != EnemyType.Ranged) return;
-        if (!rangedAttackPending) return;
         if (health != null && health.IsDead)
         {
             CancelPendingAttack();
             return;
         }
 
-        if (Time.time >= pendingFireTime)
+        if (enemyType == EnemyType.Melee)
+        {
+            if (meleeAttackPending && Time.time >= pendingMeleeHitTime)
+            {
+                meleeAttackPending = false;
+                ResolveMeleeAttack();
+            }
+            return;
+        }
+
+        if (rangedAttackPending && Time.time >= pendingFireTime)
         {
             rangedAttackPending = false;
             FireRangedHitscan();
@@ -84,7 +96,7 @@ public class EnemyCombat : MonoBehaviour
     public bool CanAttackNow()
     {
         if (enemyType == EnemyType.Melee)
-            return Time.time >= nextAttackTime;
+            return Time.time >= nextAttackTime && !meleeAttackPending;
 
         return Time.time >= nextAttackTime && !rangedAttackPending;
     }
@@ -96,13 +108,16 @@ public class EnemyCombat : MonoBehaviour
 
     public void CancelPendingAttack()
     {
+        meleeAttackPending = false;
         rangedAttackPending = false;
     }
 
     public bool IsAttackPending()
     {
-        return rangedAttackPending;
+        return enemyType == EnemyType.Melee ? meleeAttackPending : rangedAttackPending;
     }
+
+    public bool IsMeleeTelegraphActive => enemyType == EnemyType.Melee && meleeAttackPending;
 
     public void TryAttack()
     {
@@ -111,7 +126,7 @@ public class EnemyCombat : MonoBehaviour
 
         if (enemyType == EnemyType.Melee)
         {
-            TryMeleeAttack();
+            StartMeleeAttack();
         }
         else
         {
@@ -119,9 +134,17 @@ public class EnemyCombat : MonoBehaviour
         }
     }
 
-    private void TryMeleeAttack()
+    private void StartMeleeAttack()
     {
-        if (Vector3.Distance(self.position, player.position) <= meleeRange + 0.1f)
+        if (meleeAttackPending) return;
+        meleeAttackPending = true;
+        pendingMeleeHitTime = Time.time + meleeWindup;
+    }
+
+    private void ResolveMeleeAttack()
+    {
+        if (player == null) return;
+        if (Vector3.Distance(self.position, player.position) <= meleeRange + meleeHitRangeGrace)
         {
             IDamageable damageable = player.GetComponentInParent<IDamageable>();
             if (damageable != null)

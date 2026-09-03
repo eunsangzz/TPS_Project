@@ -80,7 +80,6 @@ public static class SkillPlayRegression
         PlayerHealth health = player.AddComponent<PlayerHealth>();
         ThirdPersonShooter shooter = player.AddComponent<ThirdPersonShooter>();
         WeaponData weapon = ScriptableObject.CreateInstance<WeaponData>();
-        weapon.autoReloadWhenEmpty = false;
         Set(shooter, "weaponData", weapon);
         Set(shooter, "shooterCamera", camera);
         player.SetActive(true);
@@ -134,16 +133,19 @@ public static class SkillPlayRegression
         InputSystem.QueueStateEvent(mouse, new MouseState { position = position }.WithButton(MouseButton.Left));
         InputSystem.Update();
         yield return null;
-        Expect(shooter.AmmoInMag == 29 && stage.CurrentStage == 1, "Mouse down fired or selected before release.");
+        Expect(runtime.AmmoInMag == 29 && stage.CurrentStage == 1, "Mouse down fired or selected before release.");
         InputSystem.QueueStateEvent(mouse, new MouseState { position = position });
         InputSystem.Update();
         yield return null;
         yield return null;
         Expect(!ui.IsOpen && stage.CurrentStage == 2 && skills.Level(selected) == 1, "Real mouse selection did not apply one skill/advance one stage.");
-        Expect(shooter.AmmoInMag == 30 && shooter.ReserveAmmo == 60 && !input.FireHeld, "Selection leaked gunfire or failed to refill.");
+        int expectedStageAmmo = loadout.IsShotgunEquipped ? 32 : 90;
+        Expect(shooter.AmmoInMag + shooter.ReserveAmmo == expectedStageAmmo && !input.FireHeld, "Selection leaked gunfire or failed to refill.");
         Expect(!ui.TryChoose(1) && stage.CurrentStage == 2, "Double selection granted an extra stage.");
 
         skills.Acquire(PlayerSkill.AmmoRecovery);
+        if (!loadout.IsSlotUnlocked(2)) skills.Acquire(PlayerSkill.RifleUnlock);
+        loadout.TrySelectSlot(2);
         for (int i = 0; i < 10; i++) runtime.ConsumeAmmo();
         loadout.TrySelectSlot(1);
         EnemyHealth meleeTarget = new GameObject("Melee target", typeof(CapsuleCollider), typeof(EnemyHealth)).GetComponent<EnemyHealth>();
@@ -163,7 +165,7 @@ public static class SkillPlayRegression
         gunTarget.currentHealth = 1f;
         gunTarget.regenPerSecond = 0f;
         Physics.SyncTransforms();
-        Invoke(shooter, "TraceShot", new Ray(new Vector3(0f, 1f, 0f), Vector3.forward));
+        Invoke(shooter, "TraceShot", new Ray(new Vector3(0f, 1f, 0f), Vector3.forward), weapon);
         Expect(gunTarget.IsDead && shooter.AmmoInMag + shooter.ReserveAmmo == ammo, "Rifle kill incorrectly granted melee ammo.");
         alive[0].TakeDamage(999f, Vector3.zero, Vector3.forward);
         while (!stage.IsChoosingSkill) yield return null;

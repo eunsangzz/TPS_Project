@@ -9,8 +9,7 @@ public class ThirdPersonMotor : MonoBehaviour
     [SerializeField] private float acceleration = 12f;
     [SerializeField] private float rotationSpeed = 14f;
 
-    [Header("Jump")]
-    [SerializeField] private float jumpHeight = 1.2f;
+    [Header("Grounding")]
     [SerializeField] private float gravity = -20f;
     [SerializeField] private float groundedStickForce = -3f;
 
@@ -20,6 +19,7 @@ public class ThirdPersonMotor : MonoBehaviour
     [SerializeField] private ThirdPersonCamera cameraController;
     [SerializeField] private Animator animator;
     [SerializeField] private CoverController cover;
+    [SerializeField] private PlayerDodge dodge;
 
     private CharacterController controller;
 
@@ -36,18 +36,33 @@ public class ThirdPersonMotor : MonoBehaviour
         if (input == null) input = GetComponent<ThirdPersonInput>();
         if (animator == null) animator = GetComponentInChildren<Animator>();
         if (cover == null) cover = GetComponent<CoverController>();
+        if (dodge == null) dodge = GetComponent<PlayerDodge>();
+        if (dodge == null) dodge = gameObject.AddComponent<PlayerDodge>();
+        dodge.Initialize(cameraRoot, animator);
+        PlayerLean lean = GetComponent<PlayerLean>();
+        if (lean == null) lean = gameObject.AddComponent<PlayerLean>();
+        lean.Initialize(animator);
     }
 
     private void Update()
     {
         HandleMovement();
-        HandleJumpAndGravity();
+        HandleGravity();
         ApplyMove();
         UpdataAnimator();
     }
 
     private void HandleMovement()
     {
+        if (dodge != null && dodge.IsDodging)
+        {
+            currentMove = dodge.MovementVelocity;
+            currentSpeed = currentMove.magnitude;
+            if (currentMove.sqrMagnitude > 0.001f)
+                transform.rotation = Quaternion.LookRotation(currentMove, Vector3.up);
+            return;
+        }
+
         Vector2 raw = (input != null) ? input.Move : Vector2.zero;
         Vector2 moveInput = Vector2.ClampMagnitude(raw, 1f);
 
@@ -136,15 +151,11 @@ public class ThirdPersonMotor : MonoBehaviour
         }
     }
 
-    private void HandleJumpAndGravity()
+    private void HandleGravity()
     {
         bool grounded = controller.isGrounded;
 
         if (grounded && velocity.y < 0f) velocity.y = groundedStickForce;
-       
-
-        if(grounded && input != null  &&input.JumpPressed) velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
-
         velocity.y += gravity * Time.deltaTime;
     }
 
@@ -164,8 +175,9 @@ public class ThirdPersonMotor : MonoBehaviour
         float speedPercent = Mathf.InverseLerp(0f, sprintSpeed, currentSpeed);
 
         animator.SetFloat("MoveSpeed", speedPercent, 0.1f, Time.deltaTime);
-        animator.SetBool("IsSprint", input != null && input.SprintHeld);
-        animator.SetBool("IsAim", cameraController != null && cameraController.IsAiming);
+        bool isDodging = dodge != null && dodge.IsDodging;
+        animator.SetBool("IsSprint", !isDodging && input != null && input.SprintHeld);
+        animator.SetBool("IsAim", !isDodging && cameraController != null && cameraController.IsAiming);
         animator.SetBool("IsGrounded", controller.isGrounded);
     }
 }

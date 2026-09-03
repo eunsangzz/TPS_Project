@@ -28,8 +28,17 @@ public static class SkillRegression
             ThirdPersonShooter shooter = player.GetComponent<ThirdPersonShooter>();
             PlayerSkills skills = player.GetComponent<PlayerSkills>();
             PlayerHealth health = player.GetComponent<PlayerHealth>();
+            PlayerLoadout loadout = player.GetComponent<PlayerLoadout>();
             WeaponRuntime runtime = (WeaponRuntime)Get(shooter, "runtime");
+            WeaponData data = (WeaponData)Get(shooter, "weaponData");
             Expect(skills != null, "Automatic skill setup failed.");
+            PlayerSkill[] firstRewards = skills.RollOffers();
+            Expect(loadout.SelectedSlot == 1 && firstRewards.Count(PlayerSkills.IsWeaponUnlock) == 1,
+                "First reward must offer exactly one weapon unlock after a melee-only start.");
+            Expect(skills.Acquire(PlayerSkill.RifleUnlock) && loadout.IsRifleEquipped && !loadout.IsSlotUnlocked(3),
+                "Rifle reward did not unlock only slot 2.");
+            Expect(skills.Acquire(PlayerSkill.ShotgunUnlock) && loadout.IsShotgunEquipped && loadout.TrySelectSlot(2),
+                "Shotgun reward did not unlock slot 3 or preserve rifle access.");
             for (int roll = 0; roll < 100; roll++)
             {
                 PlayerSkill[] offers = skills.RollOffers();
@@ -48,17 +57,17 @@ public static class SkillRegression
             self.transform.position = new Vector3(0f, 1f, 2f);
             Ray ray = new Ray(new Vector3(0f, 1f, 0f), Vector3.forward);
             Physics.SyncTransforms();
-            Invoke(shooter, "TraceShot", ray);
+            Invoke(shooter, "TraceShot", ray, data);
             Expect(first.currentHealth == 136f && second.currentHealth == 200f, "Baseline rifle damage or self filtering failed.");
             first.currentHealth = 200f;
             skills.Acquire(PlayerSkill.PiercingRounds);
-            Invoke(shooter, "TraceShot", ray);
+            Invoke(shooter, "TraceShot", ray, data);
             Expect(first.currentHealth == 136f && second.currentHealth == 168f && third.currentHealth == 200f, "Piercing attenuation, limit or collider deduplication failed.");
             first.currentHealth = second.currentHealth = 200f;
             GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
             wall.transform.position = new Vector3(0f, 1f, 6f);
             Physics.SyncTransforms();
-            Vector3 endpoint = (Vector3)Invoke(shooter, "TraceShot", ray);
+            Vector3 endpoint = (Vector3)Invoke(shooter, "TraceShot", ray, data);
             Expect(first.currentHealth == 136f && second.currentHealth == 200f && endpoint.z < 6f, "Piercing crossed a wall.");
             foreach (GameObject item in new[] { first.gameObject, second.gameObject, third.gameObject, wall, self }) UnityEngine.Object.DestroyImmediate(item);
 
@@ -102,7 +111,9 @@ public static class SkillRegression
             UnityEngine.Object.DestroyImmediate(player);
             player = CreatePlayer(camera);
             skills = player.GetComponent<PlayerSkills>();
-            Expect(skills.GunDamageMultiplier == 1f && skills.Level(PlayerSkill.Toughness) == 0, "New run kept previous upgrades.");
+            loadout = player.GetComponent<PlayerLoadout>();
+            Expect(skills.GunDamageMultiplier == 1f && skills.Level(PlayerSkill.Toughness) == 0 &&
+                loadout.SelectedSlot == 1 && !loadout.IsSlotUnlocked(2) && !loadout.IsSlotUnlocked(3), "New run kept previous upgrades or weapons.");
             UnityEngine.Random.InitState(7);
             ui.Show(skills, 1, () => callbacks++);
             Capture(ui, camera, 1280, 720, "skills-wide.png");

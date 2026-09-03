@@ -12,7 +12,10 @@ public class EnemySightIndicatorUI : MonoBehaviour
     [SerializeField] private float screenPadding = 28f;
 
     private readonly Dictionary<EnemyPerception, RectTransform> indicators = new Dictionary<EnemyPerception, RectTransform>();
+    private readonly HashSet<EnemyPerception> visibleThisFrame = new HashSet<EnemyPerception>();
+    private readonly List<EnemyPerception> indicatorsToRemove = new List<EnemyPerception>();
     private Sprite indicatorSprite;
+    private Texture2D indicatorTexture;
 
     private void Awake()
     {
@@ -23,36 +26,75 @@ public class EnemySightIndicatorUI : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (targetCamera == null || indicatorRoot == null) return;
+        visibleThisFrame.Clear();
 
-        EnemyPerception[] perceptions = FindObjectsByType<EnemyPerception>(FindObjectsSortMode.None);
-        var visibleThisFrame = new HashSet<EnemyPerception>();
-
-        foreach (EnemyPerception perception in perceptions)
+        if (targetCamera != null && indicatorRoot != null)
         {
-            if (perception == null || !perception.isActiveAndEnabled) continue;
+            EnemyPerception[] perceptions = FindObjectsByType<EnemyPerception>(FindObjectsSortMode.None);
+            foreach (EnemyPerception perception in perceptions)
+            {
+                if (perception == null || !perception.isActiveAndEnabled) continue;
 
-            EnemyAI enemy = perception.GetComponent<EnemyAI>();
-            if (enemy == null || !enemy.CanCurrentlySeePlayer) continue;
+                EnemyAI enemy = perception.GetComponent<EnemyAI>();
+                if (enemy == null || !enemy.CanCurrentlySeePlayer) continue;
 
-            visibleThisFrame.Add(perception);
-            RectTransform indicator = GetOrCreateIndicator(perception);
-            indicator.gameObject.SetActive(true);
-            PositionIndicator(indicator, perception.transform);
+                visibleThisFrame.Add(perception);
+                RectTransform indicator = GetOrCreateIndicator(perception);
+                indicator.gameObject.SetActive(true);
+                PositionIndicator(indicator, perception.transform);
+            }
         }
 
+        // Cleanup must also run when the camera or UI root has been removed.
         foreach (var pair in indicators)
         {
-            if (!visibleThisFrame.Contains(pair.Key))
+            if (pair.Key == null || !pair.Key.isActiveAndEnabled || pair.Value == null)
+            {
+                if (pair.Value != null) Destroy(pair.Value.gameObject);
+                indicatorsToRemove.Add(pair.Key);
+            }
+            else if (!visibleThisFrame.Contains(pair.Key))
             {
                 pair.Value.gameObject.SetActive(false);
             }
         }
+
+        foreach (EnemyPerception perception in indicatorsToRemove)
+            indicators.Remove(perception);
+
+        indicatorsToRemove.Clear();
+        visibleThisFrame.Clear();
+    }
+
+    private void OnDisable()
+    {
+        ClearIndicators();
+    }
+
+    private void OnDestroy()
+    {
+        ClearIndicators();
+        if (indicatorSprite != null) Destroy(indicatorSprite);
+        if (indicatorTexture != null) Destroy(indicatorTexture);
+        indicatorSprite = null;
+        indicatorTexture = null;
+    }
+
+    private void ClearIndicators()
+    {
+        foreach (RectTransform indicator in indicators.Values)
+        {
+            if (indicator != null) Destroy(indicator.gameObject);
+        }
+
+        indicators.Clear();
+        visibleThisFrame.Clear();
+        indicatorsToRemove.Clear();
     }
 
     private RectTransform GetOrCreateIndicator(EnemyPerception perception)
     {
-        if (indicators.TryGetValue(perception, out RectTransform existing))
+        if (indicators.TryGetValue(perception, out RectTransform existing) && existing != null)
         {
             return existing;
         }
@@ -69,7 +111,7 @@ public class EnemySightIndicatorUI : MonoBehaviour
         image.color = indicatorColor;
         image.raycastTarget = false;
 
-        indicators.Add(perception, rect);
+        indicators[perception] = rect;
         return rect;
     }
 
@@ -108,6 +150,7 @@ public class EnemySightIndicatorUI : MonoBehaviour
         const int width = 32;
         const int height = 72;
         Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        indicatorTexture = texture;
 
         for (int y = 0; y < height; y++)
         {

@@ -1,8 +1,11 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 
 public static class EnemyCombatRegression
@@ -110,13 +113,29 @@ public static class EnemyCombatRegression
                 Invoke(combat, "OnDisable");
                 Expect(!combat.IsAttackPending(), "Disabled shooter kept a pending shot.");
             });
-            Check("Melee damage is unchanged", () =>
+            Check("Melee attack telegraphs before dealing damage", () =>
             {
                 combat.enemyType = EnemyType.Melee;
                 combat.player.position = combat.transform.position + Vector3.forward;
                 combat.TryAttack();
+                Expect(combat.IsMeleeTelegraphActive && combat.IsAttackPending(), "Melee warning did not begin.");
+                ExpectHealth(100f);
+                Set(combat, "pendingMeleeHitTime", Time.time - 1f);
+                Invoke(combat, "Update");
                 ExpectHealth(90f);
+                Expect(!combat.IsAttackPending(), "Melee warning remained active after impact.");
             });
+            Check("Melee windup can be dodged", () =>
+            {
+                combat.enemyType = EnemyType.Melee;
+                combat.player.position = combat.transform.position + Vector3.forward;
+                combat.TryAttack();
+                combat.player.position = combat.transform.position + Vector3.forward * 4f;
+                Set(combat, "pendingMeleeHitTime", Time.time - 1f);
+                Invoke(combat, "Update");
+                ExpectHealth(100f);
+            });
+            ValidateMeleeMovementAndDeathAnimation();
             Debug.Log($"[EnemyCombatRegression] PASS: {passed} checks.");
         }
         finally
@@ -126,6 +145,73 @@ public static class EnemyCombatRegression
             EditorSceneManager.CloseScene(testScene, true);
             if (previousScene.IsValid()) SceneManager.SetActiveScene(previousScene);
         }
+    }
+
+    private static void ValidateMeleeMovementAndDeathAnimation()
+    {
+        const string controllerPath = "Assets/SciFiWarriorPBRHPPolyart/Animators/SciFiWarrior.controller";
+        const string prefabPath = "Assets/SciFiWarriorPBRHPPolyart/Prefabs/MeleeEnemy.prefab";
+        AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath);
+        Expect(controller != null, "Enemy animator controller is missing.");
+        AnimatorStateMachine baseLayer = controller.layers[0].stateMachine;
+        AnimatorState locomotion = baseLayer.states.Select(value => value.state).FirstOrDefault(value => value.name == "Locomotion");
+        AnimatorState die = baseLayer.states.Select(value => value.state).FirstOrDefault(value => value.name == "Die");
+        Expect(locomotion != null && locomotion.speedParameterActive && locomotion.speedParameter == "MovementSpeedMultiplier",
+            "Locomotion is not driven by the melee animation speed multiplier.");
+        Expect(die != null && die.motion != null && die.motion.name == "Die", "Die clip is not connected to the base layer.");
+        Expect(baseLayer.anyStateTransitions.Any(transition => transition.destinationState == die &&
+            transition.conditions.Any(condition => condition.parameter == "Die")), "Die trigger does not transition to the death state.");
+        Vector3 firstSlot = EnemyAI.CalculateSurroundOffset(0, 0.85f, 1f);
+        Vector3 secondSlot = EnemyAI.CalculateSurroundOffset(1, 0.85f, 1f);
+        Vector3 outerSlot = EnemyAI.CalculateSurroundOffset(6, 0.85f, 1f);
+        Expect(Vector3.Angle(firstSlot, secondSlot) > 45f && outerSlot.magnitude > firstSlot.magnitude + 0.8f,
+            "Melee surround slots do not distribute enemies across angles and rings.");
+
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+        GameObject enemy = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+        try
+        {
+            EnemyHealth health = enemy.AddComponent<EnemyHealth>();
+            health.destroyDelay = 100f;
+            EnemyAI ai = enemy.AddComponent<EnemyAI>();
+            NavMeshAgent agent = enemy.GetComponent<NavMeshAgent>();
+            // Edit-mode AddComponent does not run Awake, so mirror the runtime setup order.
+            Invoke(health, "Awake");
+            Invoke(ai, "Awake");
+            Expect(Mathf.Approximately(ai.meleeMoveSpeed, 5.4f) && Mathf.Approximately(agent.speed, 5.4f),
+                $"Melee movement speed is not 1.5x the previous 3.6 value (configured={ai.meleeMoveSpeed}, agent={agent.speed}).");
+            Animator animator = enemy.GetComponent<Animator>();
+            Transform rifle = enemy.GetComponentsInChildren<Transform>(true).FirstOrDefault(value => value.name == "AssaultRifle");
+            Transform blade = enemy.GetComponentsInChildren<Transform>(true).FirstOrDefault(value => value.name == EnemyAI.MeleeWeaponName);
+            Expect(rifle != null && !rifle.gameObject.activeSelf, "Melee enemy still displays the assault rifle.");
+            Expect(blade != null && blade.gameObject.activeSelf && blade.Find("Blade") != null,
+                "Melee enemy did not receive its melee blade.");
+            ai.enemyType = EnemyType.Ranged;
+            Invoke(ai, "ApplyTypeState");
+            Expect(rifle.gameObject.activeSelf && !blade.gameObject.activeSelf,
+                "Ranged presentation did not restore the rifle and hide the melee blade.");
+            ai.enemyType = EnemyType.Melee;
+            Invoke(ai, "ApplyTypeState");
+            animator.Rebind();
+            animator.Update(0f);
+            Invoke(ai, "TriggerAttackAnimation");
+            animator.Update(0.05f);
+            int meleeLayer = animator.GetLayerIndex("PlayerMelee");
+            Expect(meleeLayer >= 0 && animator.GetCurrentAnimatorStateInfo(meleeLayer).IsName("Attack"),
+                "Melee attack did not enter the dedicated upper-body attack animation.");
+            health.ApplyDamage(999f);
+            animator.Update(0.1f);
+            AnimatorStateInfo current = animator.GetCurrentAnimatorStateInfo(0);
+            AnimatorStateInfo next = animator.GetNextAnimatorStateInfo(0);
+            Expect(current.IsName("Base Layer.Die") || next.IsName("Base Layer.Die"),
+                "Enemy death did not enter the Die animation state.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(enemy);
+        }
+        passed++;
+        Debug.Log("[EnemyCombatRegression] PASS: dodgeable melee telegraph, surround slots, blade/rifle separation, melee attack, speed, locomotion multiplier, and Die animation.");
     }
 
     public static void RunBatch()

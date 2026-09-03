@@ -75,7 +75,9 @@ public class SkillSelectionUI : MonoBehaviour
             card.Stripe.GetComponent<Image>().color = accent;
             card.Title.text = PlayerSkills.Title(skill);
             card.Description.text = PlayerSkills.Description(skill);
-            card.Level.text = (int)skill < 6 ? $"LV {owner.Level(skill)} > {owner.Level(skill) + 1}   /   MAX {PlayerSkills.MaxLevel(skill)}" : "BONUS REWARD";
+            card.Level.text = PlayerSkills.IsWeaponUnlock(skill) ? "WEAPON UNLOCK" :
+                (int)skill < 6 ? $"LV {owner.Level(skill)} > {owner.Level(skill) + 1}   /   MAX {PlayerSkills.MaxLevel(skill)}" : "BONUS REWARD";
+            card.Action.text = PlayerSkills.IsWeaponUnlock(skill) ? "UNLOCK  >" : "ACQUIRE  >";
             card.Action.color = accent;
             card.Button.interactable = true;
         }

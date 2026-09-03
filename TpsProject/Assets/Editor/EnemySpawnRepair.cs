@@ -57,7 +57,7 @@ public static class EnemySpawnRepair
             NavMeshAgent agent = EnsureComponent<NavMeshAgent>(root);
             agent.radius = 0.5f;
             agent.height = 2f;
-            agent.speed = enemyType == EnemyType.Ranged ? 2.2f : 3.6f;
+            agent.speed = enemyType == EnemyType.Ranged ? 2.2f : EnemyAI.DefaultMeleeMoveSpeed;
             agent.angularSpeed = 120f;
             agent.acceleration = 8f;
             agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
@@ -117,6 +117,8 @@ public static class EnemySpawnRepair
     {
         EnemyAI meleePrefab = AssetDatabase.LoadAssetAtPath<EnemyAI>(MeleeEnemyPrefabPath);
         EnemyAI rangedPrefab = AssetDatabase.LoadAssetAtPath<EnemyAI>(RangedEnemyPrefabPath);
+        GameObject meleePrefabObject = AssetDatabase.LoadAssetAtPath<GameObject>(MeleeEnemyPrefabPath);
+        GameObject rangedPrefabObject = AssetDatabase.LoadAssetAtPath<GameObject>(RangedEnemyPrefabPath);
 
         foreach (StageManager manager in Object.FindObjectsByType<StageManager>(FindObjectsInactive.Include, FindObjectsSortMode.None))
         {
@@ -127,6 +129,11 @@ public static class EnemySpawnRepair
             enemyPrefabs.arraySize = 2;
             enemyPrefabs.GetArrayElementAtIndex(0).objectReferenceValue = meleePrefab;
             enemyPrefabs.GetArrayElementAtIndex(1).objectReferenceValue = rangedPrefab;
+
+            SerializedProperty enemyPrefabObjects = serializedManager.FindProperty("enemyPrefabObjects");
+            enemyPrefabObjects.arraySize = 2;
+            enemyPrefabObjects.GetArrayElementAtIndex(0).objectReferenceValue = meleePrefabObject;
+            enemyPrefabObjects.GetArrayElementAtIndex(1).objectReferenceValue = rangedPrefabObject;
 
             serializedManager.FindProperty("player").objectReferenceValue = FindPlayer(scene);
             serializedManager.FindProperty("statusUI").objectReferenceValue = FindInScene<StageStatusUI>(scene);

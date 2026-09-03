@@ -30,11 +30,18 @@ public class ThirdPersonCamera : MonoBehaviour
     [SerializeField] private Vector3 aimOffset = new Vector3(0.45f, 0.1f, 0f);
     [SerializeField] private float offsetSmooth = 10f;
 
+    [Header("Lean / Peek")]
+    [Tooltip("Horizontal camera travel at full Q/E lean, in metres. The camera stays level.")]
+    [SerializeField, Min(0f)] private float leanDistance = 0.25f;
+    [Tooltip("Smoothing time for peek movement and return, in seconds. Higher values move more gradually.")]
+    [SerializeField, Min(0.01f)] private float leanSmoothTime = 0.25f;
+
     private enum AimState { Hip, Shoulder, Scope }
 
     [Header("Aim/Scope")]
     [SerializeField] private float scopeDoubleClickWindow = 0.25f; // 占쏙옙클占쏙옙 占쏙옙占쏙옙클占쏙옙 占쏙옙占쏙옙 占시곤옙
-    [SerializeField] private float zoomMultiplier = 4f;            // 4占쏙옙 占쏙옙
+    [SerializeField] private float zoomMultiplier = 2f; // Rifle scope zoom
+    [SerializeField, Min(1f)] private float sniperZoomMultiplier = 6f;
     [SerializeField] private float zoomSmooth = 12f;               // 占쏙옙 占쏙옙환 占쌈듸옙
 
     [Header("Aim Sens")]
@@ -54,9 +61,19 @@ public class ThirdPersonCamera : MonoBehaviour
 
     private AimState aimState = AimState.Hip;
     private float lastRmbPressTime = -999f;
+    private bool suppressAimUntilRelease;
 
     public bool IsAiming => aimState != AimState.Hip;
-    public bool IsScoped => aimState == AimState.Scope;
+    public bool IsScoped => aimState == AimState.Scope && CanUseScope;
+    public bool CanUseScope
+    {
+        get
+        {
+            PlayerLoadout loadout = target != null ? target.GetComponent<PlayerLoadout>() : null;
+            return loadout == null || loadout.IsRifleEquipped || loadout.IsSniperEquipped;
+        }
+    }
+    public bool IsAimSuppressed => suppressAimUntilRelease;
 
     private float yaw;
     private float pitch;
@@ -64,6 +81,8 @@ public class ThirdPersonCamera : MonoBehaviour
 
     private float currentDistance;
     private Vector3 currentOffset;
+    private float currentLeanOffset;
+    private float leanOffsetVelocity;
 
     private Transform cam;
     private Camera camComponent;
@@ -129,7 +148,57 @@ public class ThirdPersonCamera : MonoBehaviour
 
         ApplyRecoil();
         FollowTarget();
+        ApplyCameraLean(Time.deltaTime);
         HandleCollision();
+    }
+
+    private void ApplyCameraLean(float deltaTime)
+    {
+        if (target == null)
+        {
+            currentLeanOffset = leanOffsetVelocity = 0f;
+            return;
+        }
+        PlayerLean lean = target.GetComponent<PlayerLean>();
+        float amount = lean != null && lean.isActiveAndEnabled ? lean.CurrentLean : 0f;
+        // FollowTarget and ApplyRecoil have restored the unrolled camera frame.
+        // Its right axis is horizontal even when looking up/down; do not orbit or roll.
+        Vector3 right = transform.right;
+        float targetOffset = amount * leanDistance;
+        targetOffset *= LimitCameraLean(right * targetOffset);
+        if (deltaTime > 0f)
+            currentLeanOffset = Mathf.SmoothDamp(currentLeanOffset, targetOffset, ref leanOffsetVelocity,
+                leanSmoothTime, Mathf.Infinity, deltaTime);
+
+        // Clip the actual smoothed position as well if a wall moves into the path.
+        // Retain the clipped position so clearing the wall resumes smoothly, without a jump.
+        float fraction = LimitCameraLean(right * currentLeanOffset);
+        if (fraction < 1f)
+        {
+            currentLeanOffset *= fraction;
+            leanOffsetVelocity = 0f;
+        }
+        transform.position += right * currentLeanOffset;
+    }
+
+    private float LimitCameraLean(Vector3 displacement)
+    {
+        float fraction = LimitLeanDisplacement(transform.position, displacement);
+        if (cam == null) return fraction;
+        Vector3 neutralCameraPosition = transform.position - transform.forward * currentDistance;
+        return Mathf.Min(fraction, LimitLeanDisplacement(neutralCameraPosition, displacement));
+    }
+
+    private float LimitLeanDisplacement(Vector3 origin, Vector3 displacement)
+    {
+        float distance = displacement.magnitude;
+        if (distance < 0.0001f) return 1f;
+        if (Physics.SphereCast(origin, collisionRadius, displacement / distance, out RaycastHit hit,
+            distance, collisionMask, QueryTriggerInteraction.Ignore))
+        {
+            return Mathf.Clamp01((hit.distance - 0.02f) / distance);
+        }
+        return 1f;
     }
 
     private void ResolveReferences()
@@ -189,10 +258,31 @@ public class ThirdPersonCamera : MonoBehaviour
     }
     private void UpdateAimScopeState()
     {
+        PlayerDodge dodge = target != null ? target.GetComponent<PlayerDodge>() : null;
+        if (dodge != null && dodge.IsDodging)
+        {
+            CancelAimForDodge();
+            return;
+        }
+        if (suppressAimUntilRelease)
+        {
+            if (Mouse.current == null || !Mouse.current.rightButton.isPressed)
+                suppressAimUntilRelease = false;
+            return;
+        }
         PlayerLoadout loadout = target != null ? target.GetComponent<PlayerLoadout>() : null;
         if (Time.timeScale <= 0f || (loadout != null && !loadout.IsGunEquipped))
         {
             aimState = AimState.Hip;
+            lastRmbPressTime = -999f;
+            SetFovScoped(false);
+            return;
+        }
+        if (!CanUseScope)
+        {
+            // Shotguns retain shoulder aim, including when switched from a scoped rifle.
+            aimState = Mouse.current != null && Mouse.current.rightButton.isPressed
+                ? AimState.Shoulder : AimState.Hip;
             lastRmbPressTime = -999f;
             SetFovScoped(false);
             return;
@@ -237,17 +327,32 @@ public class ThirdPersonCamera : MonoBehaviour
         }
     }
 
+    public void CancelAimForDodge()
+    {
+        aimState = AimState.Hip;
+        lastRmbPressTime = -999f;
+        suppressAimUntilRelease = true;
+        SetFovScoped(false);
+        if (camComponent != null) camComponent.fieldOfView = defaultFov;
+        currentOffset = normalOffset;
+    }
+
     private void SetFovScoped(bool scoped)
     {
         if (camComponent == null) return;
 
-        float scopedFov = defaultFov / Mathf.Max(zoomMultiplier, 1f);
+        PlayerLoadout loadout = target != null ? target.GetComponent<PlayerLoadout>() : null;
+        float multiplier = loadout != null && loadout.IsSniperEquipped ? sniperZoomMultiplier : zoomMultiplier;
+        float scopedFov = defaultFov / Mathf.Max(multiplier, 1f);
         targetFov = scoped ? scopedFov : defaultFov;
     }
 
     private void UpdateCameraFov()
     {
         if (camComponent == null) return;
+
+        // Refresh even while RMB is held so rifle/sniper swaps use the equipped scope.
+        SetFovScoped(IsScoped);
 
         camComponent.fieldOfView = Mathf.Lerp(
             camComponent.fieldOfView,
@@ -317,11 +422,10 @@ public class ThirdPersonCamera : MonoBehaviour
             targetDistance = Mathf.Max(hit.distance - 0.05f, minDistance);
         }
 
-        currentDistance = Mathf.Lerp(
-            currentDistance,
-            targetDistance,
-            Time.deltaTime * distanceSmooth
-        );
+        // Pull in immediately when the peek brings a wall into the boom's path.
+        // Smooth only the return outward, otherwise the camera can briefly remain inside the wall.
+        currentDistance = targetDistance < currentDistance ? targetDistance : Mathf.Lerp(
+            currentDistance, targetDistance, Time.deltaTime * distanceSmooth);
 
         cam.localPosition = new Vector3(0f, 0f, -currentDistance);
     }

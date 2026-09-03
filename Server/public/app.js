@@ -12,6 +12,7 @@ const skillNames = {
   PowerRounds: "강화 탄환", PiercingRounds: "관통 탄환", HeavyStrike: "강타",
   WideSwing: "넓은 휘두르기", AmmoRecovery: "탄약 회수", Toughness: "강인함",
   FirstAid: "응급 처치", Vitality: "체력 보강", Supply: "보급 지원",
+  RifleUnlock: "소총 해금", ShotgunUnlock: "샷건 해금", SniperUnlock: "저격총 해금",
 };
 
 function renderSkills(container, records, collapsible = false) {
@@ -30,7 +31,8 @@ function renderSkills(container, records, collapsible = false) {
   for (const skill of skills) {
     const item = document.createElement("li");
     const bonus = ["FirstAid", "Vitality", "Supply"].includes(skill.id);
-    item.textContent = `${skillNames[skill.id]} ${bonus ? `${skill.level}회` : `Lv.${skill.level}`}`;
+    const unlock = ["RifleUnlock", "ShotgunUnlock", "SniperUnlock"].includes(skill.id);
+    item.textContent = `${skillNames[skill.id]} ${bonus ? `${skill.level}회` : unlock ? "획득" : `Lv.${skill.level}`}`;
     list.append(item);
   }
   parent.append(list);

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class WeaponVFX : MonoBehaviour
@@ -25,6 +26,7 @@ public class WeaponVFX : MonoBehaviour
     private float tracerEndTime;
     private float activeTracerLife;
     private Color activeTracerColor;
+    private readonly List<LineRenderer> burstTracers = new List<LineRenderer>();
 
     public void PlayMuzzleFlash()
     {
@@ -40,6 +42,7 @@ public class WeaponVFX : MonoBehaviour
 
     public void PlayTracer(Vector3 origin, Vector3 hitPoint, Color color)
     {
+        DisableBurstTracers();
         EnsureTracer();
         if (tracer == null) return;
 
@@ -52,6 +55,23 @@ public class WeaponVFX : MonoBehaviour
         activeTracerColor = color;
         tracer.startColor = color;
         tracer.endColor = color;
+        activeTracerLife = Mathf.Max(0.08f, tracerLife);
+        tracerEndTime = Time.time + activeTracerLife;
+    }
+
+    public void PlayTracerBurst(IReadOnlyList<Vector3> hitPoints)
+    {
+        if (hitPoints == null || hitPoints.Count == 0) return;
+        EnsureTracer();
+        EnsureBurstTracerCount(hitPoints.Count - 1);
+        Vector3 origin = muzzle != null ? muzzle.position :
+            transform.position + Vector3.up * 1.2f + transform.forward * 0.5f;
+        ConfigureTracer(tracer, origin, hitPoints[0], tracerColor);
+        for (int i = 1; i < hitPoints.Count; i++)
+            ConfigureTracer(burstTracers[i - 1], origin, hitPoints[i], tracerColor);
+        for (int i = hitPoints.Count - 1; i < burstTracers.Count; i++)
+            burstTracers[i].enabled = false;
+        activeTracerColor = tracerColor;
         activeTracerLife = Mathf.Max(0.08f, tracerLife);
         tracerEndTime = Time.time + activeTracerLife;
     }
@@ -74,6 +94,45 @@ public class WeaponVFX : MonoBehaviour
         tracer.enabled = false;
     }
 
+    private void EnsureBurstTracerCount(int count)
+    {
+        while (burstTracers.Count < count)
+        {
+            GameObject tracerObject = new GameObject($"ShotgunTracer{burstTracers.Count + 2}");
+            tracerObject.transform.SetParent(transform, false);
+            LineRenderer line = tracerObject.AddComponent<LineRenderer>();
+            line.sharedMaterial = Resources.Load<Material>("BulletTracer");
+            line.widthMultiplier = Mathf.Max(0.005f, tracerWidth);
+            line.numCapVertices = 2;
+            line.alignment = LineAlignment.View;
+            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            line.receiveShadows = false;
+            line.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            line.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+            line.enabled = false;
+            burstTracers.Add(line);
+        }
+    }
+
+    private static void ConfigureTracer(LineRenderer line, Vector3 origin, Vector3 hitPoint, Color color)
+    {
+        if (line == null) return;
+        line.gameObject.SetActive(true);
+        line.enabled = true;
+        line.useWorldSpace = true;
+        line.positionCount = 2;
+        line.SetPosition(0, origin);
+        line.SetPosition(1, hitPoint);
+        line.startColor = color;
+        line.endColor = color;
+    }
+
+    private void DisableBurstTracers()
+    {
+        foreach (LineRenderer line in burstTracers)
+            if (line != null) line.enabled = false;
+    }
+
     private void LateUpdate()
     {
         if (tracer == null || !tracer.enabled) return;
@@ -82,6 +141,7 @@ public class WeaponVFX : MonoBehaviour
         if (remaining <= 0f)
         {
             tracer.enabled = false;
+            DisableBurstTracers();
             return;
         }
 
@@ -89,11 +149,18 @@ public class WeaponVFX : MonoBehaviour
         color.a *= Mathf.Clamp01(remaining / activeTracerLife);
         tracer.startColor = color;
         tracer.endColor = color;
+        foreach (LineRenderer line in burstTracers)
+        {
+            if (line == null || !line.enabled) continue;
+            line.startColor = color;
+            line.endColor = color;
+        }
     }
 
     private void OnDisable()
     {
         if (tracer != null) tracer.enabled = false;
+        DisableBurstTracers();
     }
 
     public void PlayHitEffect(RaycastHit hit)

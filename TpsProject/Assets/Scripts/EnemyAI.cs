@@ -10,10 +10,20 @@ public enum EnemyType { Melee, Ranged }
 [RequireComponent(typeof(EnemyTactics))]
 public class EnemyAI : MonoBehaviour
 {
+    public const float MeleeSpeedMultiplier = 1.5f;
+    public const float DefaultMeleeMoveSpeed = 5.4f;
+    public const string MeleeWeaponName = "EnemyMeleeBlade";
+    private const string MeleeAnimationLayerName = "PlayerMelee";
+    private const string MeleeAttackStateName = "Attack";
+    private const int SurroundSlotsPerRing = 6;
+    private static readonly List<EnemyAI> ActiveEnemies = new List<EnemyAI>();
+    private static readonly Color MeleeBladeColor = new Color(0.1f, 0.9f, 1f, 1f);
+    private static readonly Color MeleeWarningColor = new Color(1f, 0.16f, 0.04f, 1f);
     private enum State
     {
         Patrol,
         Chase,
+        Investigate,
         Attack,
         TakeCover,
         PeekShoot
@@ -34,6 +44,14 @@ public class EnemyAI : MonoBehaviour
     [SerializeField] private float fallbackPatrolRadius = 14f;
     [SerializeField] private float patrolNavMeshSampleRadius = 5f;
 
+    [Header("Patrol Boundary Avoidance")]
+    private const string PatrolBoundaryTag = "OutLine";
+    [SerializeField, Min(0.1f)] private float patrolBoundaryDistance = 1.5f;
+    [SerializeField, Min(0.5f)] private float patrolBoundaryTurnDistance = 4f;
+    [SerializeField, Min(0.05f)] private float patrolBoundaryCheckInterval = 0.25f;
+    private float nextPatrolBoundaryCheckTime;
+    private Collider[] patrolBoundaryColliders = new Collider[32];
+
     [Header("Chase")]
     public float loseSightTime = 2f;
     public float repathInterval = 0.2f;
@@ -41,9 +59,34 @@ public class EnemyAI : MonoBehaviour
     [SerializeField] private float chaseAfterDamageRange = 35f;
 
     [Header("Movement")]
-    public float meleeMoveSpeed = 3.6f;
+    public float meleeMoveSpeed = DefaultMeleeMoveSpeed;
     public float rangedMoveSpeed = 2.2f;
     public float turnSpeed = 10f;
+
+    [Header("Gunshot Hearing")]
+    [SerializeField, Min(0f)] private float gunshotHearingRange = 30f;
+    [SerializeField, Min(1f)] private float gunshotMemoryDuration = 20f;
+    [SerializeField, Min(0f)] private float gunshotSearchDuration = 2f;
+    private bool hasHeardGunshot;
+    private Vector3 lastHeardShotPosition;
+    private float heardShotExpiresAt;
+    private float gunshotSearchEndsAt = -1f;
+    public bool IsInvestigatingGunshot => state == State.Investigate;
+    public Vector3 LastHeardShotPosition => lastHeardShotPosition;
+
+    [Header("Melee Surround")]
+    [SerializeField, Min(0.4f)] private float meleeSurroundRadius = 0.85f;
+    [SerializeField, Min(0.4f)] private float meleeSurroundRingSpacing = 1.0f;
+    [SerializeField, Min(0.1f)] private float meleeSurroundSampleRadius = 1.5f;
+
+    [Header("Attack Evasion")]
+    [SerializeField, Range(0f, 1f)] private float dodgeChance = 0.32f;
+    [SerializeField, Min(0.1f)] private float dodgeCooldown = 2.5f;
+    [SerializeField, Min(0.1f)] private float dodgeDuration = 0.62f;
+    [SerializeField, Min(0.1f)] private float dodgeSpeed = 7.5f;
+    [SerializeField, Min(0.1f)] private float dodgeDistance = 3f;
+    [SerializeField, Min(0.1f)] private float meleeThreatDistance = 3.5f;
+    [SerializeField, Min(0.1f)] private float aimThreatDistance = 22f;
 
     [Header("Animator")]
     [SerializeField] private Animator animator;
@@ -52,6 +95,7 @@ public class EnemyAI : MonoBehaviour
     [SerializeField] private string isGroundedParam = "IsGrounded";
     [SerializeField] private string isSprintParam = "IsSprint";
     [SerializeField] private string attackTrigger = "FireSingle";
+    [SerializeField] private string movementSpeedMultiplierParam = "MovementSpeedMultiplier";
     [SerializeField] private float animatorSpeedDampTime = 0.12f;
 
     [Header("Ranged Evasion")]
@@ -72,6 +116,12 @@ public class EnemyAI : MonoBehaviour
     private EnemyCombat combat;
     private EnemyTactics tactics;
     private readonly Dictionary<string, AnimatorControllerParameterType> animatorParams = new Dictionary<string, AnimatorControllerParameterType>();
+    private Transform meleeWeaponRoot;
+    private Transform meleeWeaponHand;
+    private GameObject rangedWeaponObject;
+    private Renderer meleeBladeRenderer;
+    private MaterialPropertyBlock meleeBladeProperties;
+    private DodgeRollAnimation dodgeAnimation;
 
     private State state = State.Patrol;
     private CoverPoint currentCover;
@@ -84,6 +134,13 @@ public class EnemyAI : MonoBehaviour
     private float nextPatrolPickTime;
     private float nextRangedEvasionTime;
     private int rangedEvasionSide = 1;
+    private int observedPlayerAttackSequence = -1;
+    private float nextDodgeTime;
+    private float dodgeEndTime;
+    private bool isDodging;
+    private bool evaluatedCurrentAim;
+    private float preDodgeAcceleration;
+    private float preDodgeStoppingDistance;
 
     private Vector3 patrolTarget;
     private Vector3 smoothDir;
@@ -91,12 +148,24 @@ public class EnemyAI : MonoBehaviour
     public bool HasDetectedPlayer => lastSeenTime > -900f && Time.time <= lastSeenTime + loseSightTime;
     public bool CanCurrentlySeePlayer { get; private set; }
 
+    private void OnEnable()
+    {
+        if (!ActiveEnemies.Contains(this)) ActiveEnemies.Add(this);
+        ThirdPersonShooter.ShotFired += HandlePlayerGunshot;
+    }
+
     private void Awake()
     {
+        meleeBladeProperties = new MaterialPropertyBlock();
         agent = GetComponent<NavMeshAgent>();
         perception = GetComponent<EnemyPerception>();
         combat = GetComponent<EnemyCombat>();
         tactics = GetComponent<EnemyTactics>();
+        // Also support older/runtime-created enemies whose required components are missing.
+        if (agent == null) agent = gameObject.AddComponent<NavMeshAgent>();
+        if (perception == null) perception = gameObject.AddComponent<EnemyPerception>();
+        if (combat == null) combat = gameObject.AddComponent<EnemyCombat>();
+        if (tactics == null) tactics = gameObject.AddComponent<EnemyTactics>();
         if (animator == null) animator = GetComponentInChildren<Animator>();
 
         if (health == null) health = GetComponent<EnemyHealth>();
@@ -112,8 +181,27 @@ public class EnemyAI : MonoBehaviour
 
     private void OnDestroy()
     {
+        ActiveEnemies.Remove(this);
         if (health != null)
             health.Damaged -= HandleDamaged;
+    }
+
+    private void OnDisable()
+    {
+        ActiveEnemies.Remove(this);
+        ThirdPersonShooter.ShotFired -= HandlePlayerGunshot;
+        hasHeardGunshot = false;
+        if (isDodging) FinishDodge();
+    }
+
+    private void LateUpdate()
+    {
+        if (enemyType != EnemyType.Melee || meleeWeaponRoot == null || meleeWeaponHand == null) return;
+
+        meleeWeaponRoot.SetPositionAndRotation(
+            meleeWeaponHand.position + meleeWeaponHand.rotation * new Vector3(0.02f, 0.01f, 0.03f),
+            meleeWeaponHand.rotation * Quaternion.Euler(0f, 90f, 0f));
+        UpdateMeleeWeaponTelegraph();
     }
 
     private void Start()
@@ -144,9 +232,36 @@ public class EnemyAI : MonoBehaviour
             }
         }
 
+        if (isDodging)
+        {
+            UpdateDodge();
+            UpdateAnimator(false);
+            FaceMoveDirection();
+            KeepUpright();
+            return;
+        }
+
+        if (TryStartDodgeFromPlayerThreat())
+        {
+            UpdateDodge();
+            UpdateAnimator(false);
+            FaceMoveDirection();
+            KeepUpright();
+            return;
+        }
+
         bool canSee = player != null && perception.CanSeePlayer(enemyType == EnemyType.Ranged);
         CanCurrentlySeePlayer = canSee;
-        if (canSee) lastSeenTime = Time.time;
+        if (canSee)
+        {
+            lastSeenTime = Time.time;
+            hasHeardGunshot = false;
+            if (state == State.Investigate) ChangeState(State.Chase);
+        }
+        else if (hasHeardGunshot && state != State.Investigate)
+        {
+            BeginGunshotInvestigation();
+        }
 
         switch (state)
         {
@@ -171,6 +286,11 @@ public class EnemyAI : MonoBehaviour
 
             case State.PeekShoot:
                 UpdatePeekShoot(canSee);
+                break;
+
+            case State.Investigate:
+                UpdateGunshotInvestigation();
+                FaceMoveDirection();
                 break;
         }
 
@@ -213,6 +333,288 @@ public class EnemyAI : MonoBehaviour
         {
             agent.speed = rangedMoveSpeed;
         }
+
+        ConfigureWeaponPresentation();
+    }
+
+    private void HandlePlayerGunshot(ThirdPersonShooter shooter, Vector3 position)
+    {
+        if (!isActiveAndEnabled || Time.timeScale <= 0f || shooter == null || (health != null && health.IsDead)) return;
+        if (agent == null || !agent.enabled || !agent.isOnNavMesh || gunshotHearingRange <= 0f) return;
+        if (player != null && player != shooter.transform) return;
+        if ((position - transform.position).sqrMagnitude > gunshotHearingRange * gunshotHearingRange) return;
+        if (player == null)
+        {
+            player = shooter.transform;
+            SetupSharedReferences();
+        }
+
+        // Sound reveals a fixed location, not the shooter's future movements.
+        lastHeardShotPosition = position;
+        heardShotExpiresAt = Time.time + gunshotMemoryDuration;
+        gunshotSearchEndsAt = -1f;
+        hasHeardGunshot = true;
+        if (!isDodging && !perception.CanSeePlayer(enemyType == EnemyType.Ranged))
+            BeginGunshotInvestigation();
+    }
+
+    private void BeginGunshotInvestigation()
+    {
+        if (Time.time > heardShotExpiresAt || !NavMesh.SamplePosition(lastHeardShotPosition,
+            out NavMeshHit sampled, 2f, agent.areaMask) || !HasCompletePath(sampled.position))
+        {
+            hasHeardGunshot = false;
+            return;
+        }
+        if (!agent.SetDestination(sampled.position))
+        {
+            hasHeardGunshot = false;
+            return;
+        }
+        currentCover = null;
+        damageChaseEndTime = -999f;
+        agent.isStopped = false;
+        ChangeState(State.Investigate);
+    }
+
+    private void UpdateGunshotInvestigation()
+    {
+        if (!hasHeardGunshot || Time.time >= heardShotExpiresAt ||
+            (!agent.pathPending && agent.pathStatus != NavMeshPathStatus.PathComplete))
+        {
+            EndGunshotInvestigation();
+            return;
+        }
+        if (agent.pathPending || agent.remainingDistance > Mathf.Max(0.6f, agent.stoppingDistance + 0.1f)) return;
+        agent.isStopped = true;
+        if (gunshotSearchEndsAt < 0f) gunshotSearchEndsAt = Time.time + gunshotSearchDuration;
+        if (Time.time >= gunshotSearchEndsAt) EndGunshotInvestigation();
+    }
+
+    private void EndGunshotInvestigation()
+    {
+        hasHeardGunshot = false;
+        gunshotSearchEndsAt = -1f;
+        StopChasingAndPatrol();
+    }
+
+    private void ConfigureWeaponPresentation()
+    {
+        if (rangedWeaponObject == null)
+        {
+            foreach (Transform child in GetComponentsInChildren<Transform>(true))
+            {
+                if (child.name == "AssaultRifle")
+                {
+                    rangedWeaponObject = child.gameObject;
+                    break;
+                }
+            }
+        }
+
+        bool isMelee = enemyType == EnemyType.Melee;
+        if (rangedWeaponObject != null) rangedWeaponObject.SetActive(!isMelee);
+
+        if (isMelee && meleeWeaponRoot == null) CreateMeleeWeapon();
+        if (meleeWeaponRoot != null) meleeWeaponRoot.gameObject.SetActive(isMelee);
+
+        if (animator != null)
+        {
+            int meleeLayer = animator.GetLayerIndex(MeleeAnimationLayerName);
+            if (meleeLayer >= 0) animator.SetLayerWeight(meleeLayer, isMelee ? 1f : 0f);
+        }
+    }
+
+    private bool TryStartDodgeFromPlayerThreat()
+    {
+        if (Time.timeScale <= 0f || player == null || agent == null || !agent.enabled || !agent.isOnNavMesh) return false;
+        PlayerHealth playerHealth = player.GetComponent<PlayerHealth>();
+        if (playerHealth != null && playerHealth.IsDead) return false;
+
+        bool threatened = false;
+        PlayerMelee playerMelee = player.GetComponent<PlayerMelee>();
+        if (playerMelee != null && playerMelee.AttackSequence != observedPlayerAttackSequence)
+        {
+            observedPlayerAttackSequence = playerMelee.AttackSequence;
+            Vector3 toEnemy = Vector3.ProjectOnPlane(transform.position - player.position, Vector3.up);
+            threatened = playerMelee.IsAttacking && toEnemy.magnitude <= meleeThreatDistance &&
+                Vector3.Dot(player.forward, toEnemy.normalized) > 0.3f && HasClearThreatLine(player.position + Vector3.up);
+        }
+
+        ThirdPersonInput playerInput = player.GetComponent<ThirdPersonInput>();
+        PlayerLoadout playerLoadout = player.GetComponent<PlayerLoadout>();
+        bool aiming = playerInput != null && playerInput.AimHeld &&
+            (playerLoadout == null || (playerLoadout.IsGunEquipped && playerLoadout.CanAct)) && IsPlayerAimingAtThisEnemy();
+        if (!aiming)
+        {
+            evaluatedCurrentAim = false;
+        }
+        else if (!evaluatedCurrentAim)
+        {
+            evaluatedCurrentAim = true;
+            threatened = true;
+        }
+
+        if (!threatened || Time.time < nextDodgeTime || Random.value >= dodgeChance) return false;
+        return StartDodge();
+    }
+
+    private bool IsPlayerAimingAtThisEnemy()
+    {
+        Transform view = Camera.main != null ? Camera.main.transform : player;
+        Vector3 target = transform.position + Vector3.up * 1.2f - view.position;
+        if (target.sqrMagnitude > aimThreatDistance * aimThreatDistance) return false;
+        return Vector3.Dot(view.forward, target.normalized) >= 0.96f && HasClearThreatLine(view.position);
+    }
+
+    private bool HasClearThreatLine(Vector3 origin)
+    {
+        Vector3 offset = transform.position + Vector3.up * 1.2f - origin;
+        foreach (RaycastHit hit in Physics.RaycastAll(origin, offset.normalized, offset.magnitude,
+            perception != null ? perception.obstacleMask.value : ~0, QueryTriggerInteraction.Ignore))
+        {
+            if (hit.transform == transform || hit.transform.IsChildOf(transform) ||
+                hit.transform == player || hit.transform.IsChildOf(player)) continue;
+            return false;
+        }
+        return true;
+    }
+
+    private bool StartDodge()
+    {
+        Vector3 away = transform.position - player.position;
+        away.y = 0f;
+        if (away.sqrMagnitude < 0.001f) away = transform.forward;
+        Vector3 side = Vector3.Cross(Vector3.up, away.normalized);
+        if (Random.value < 0.5f) side = -side;
+        // Roll along a clear segment instead of following a detour around a wall.
+        if (!TryGetDodgeDestination(side, out Vector3 destination) &&
+            !TryGetDodgeDestination(-side, out destination)) return false;
+        if (!agent.SetDestination(destination)) return false;
+
+        combat?.CancelPendingAttack();
+        currentCover = null;
+        isDodging = true;
+        dodgeEndTime = Time.time + dodgeDuration;
+        nextDodgeTime = Time.time + dodgeCooldown;
+        lastSeenTime = Time.time;
+        preDodgeAcceleration = agent.acceleration;
+        preDodgeStoppingDistance = agent.stoppingDistance;
+        agent.acceleration = 60f;
+        agent.stoppingDistance = 0.1f;
+        agent.isStopped = false;
+        agent.speed = dodgeSpeed;
+        Vector3 rollDirection = Vector3.ProjectOnPlane(destination - transform.position, Vector3.up).normalized;
+        (modelRoot != null ? modelRoot : transform).rotation = Quaternion.LookRotation(rollDirection, Vector3.up);
+        smoothDir = rollDirection;
+        ChangeState(State.Chase);
+
+        if (animator != null)
+        {
+            if (dodgeAnimation == null) dodgeAnimation = animator.GetComponent<DodgeRollAnimation>();
+            if (dodgeAnimation == null) dodgeAnimation = animator.gameObject.AddComponent<DodgeRollAnimation>();
+            dodgeAnimation.Initialize(animator);
+            dodgeAnimation.Play(dodgeDuration);
+        }
+        return true;
+    }
+
+    private void UpdateDodge()
+    {
+        if (!isDodging) return;
+        if (Time.time < dodgeEndTime && agent.enabled && agent.isOnNavMesh) return;
+
+        FinishDodge();
+    }
+
+    private bool TryGetDodgeDestination(Vector3 direction, out Vector3 destination)
+    {
+        destination = transform.position;
+        if (!NavMesh.SamplePosition(transform.position + direction * dodgeDistance,
+            out NavMeshHit sampled, 0.6f, agent.areaMask)) return false;
+        if (Vector3.Distance(transform.position, sampled.position) < dodgeDistance * 0.5f ||
+            Mathf.Abs(sampled.position.y - transform.position.y) > 0.5f) return false;
+        if (agent.Raycast(sampled.position, out _) || !HasCompletePath(sampled.position)) return false;
+        destination = sampled.position;
+        return true;
+    }
+
+    private void FinishDodge()
+    {
+        isDodging = false;
+        dodgeAnimation?.Cancel();
+        agent.acceleration = preDodgeAcceleration;
+        agent.stoppingDistance = preDodgeStoppingDistance;
+        ApplyTypeState();
+        nextRepathTime = 0f;
+        ChangeState(State.Chase);
+    }
+
+    private void CreateMeleeWeapon()
+    {
+        if (animator != null && animator.isHuman)
+            meleeWeaponHand = animator.GetBoneTransform(HumanBodyBones.RightHand);
+        if (meleeWeaponHand == null)
+        {
+            foreach (Transform child in GetComponentsInChildren<Transform>(true))
+            {
+                if (child.name == "Hand_Right")
+                {
+                    meleeWeaponHand = child;
+                    break;
+                }
+            }
+        }
+        if (meleeWeaponHand == null) return;
+
+        GameObject root = new GameObject(MeleeWeaponName);
+        root.transform.SetParent(transform, false);
+        meleeWeaponRoot = root.transform;
+
+        meleeBladeRenderer = CreateWeaponPart("Blade", root.transform, new Vector3(0f, 0f, 0.62f), new Vector3(0.09f, 0.035f, 1.05f),
+            new Color(0.1f, 0.9f, 1f, 1f), new Color(0.1f, 1.6f, 2.2f, 1f));
+        CreateWeaponPart("Grip", root.transform, new Vector3(0f, 0f, -0.12f), new Vector3(0.12f, 0.12f, 0.32f),
+            new Color(0.08f, 0.1f, 0.13f, 1f), Color.black);
+        CreateWeaponPart("Guard", root.transform, new Vector3(0f, 0f, 0.08f), new Vector3(0.38f, 0.08f, 0.08f),
+            new Color(0.28f, 0.34f, 0.4f, 1f), Color.black);
+    }
+
+    private static Renderer CreateWeaponPart(string partName, Transform parent, Vector3 localPosition, Vector3 localScale,
+        Color color, Color emission)
+    {
+        GameObject part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        part.name = partName;
+        part.transform.SetParent(parent, false);
+        part.transform.localPosition = localPosition;
+        part.transform.localScale = localScale;
+
+        Collider partCollider = part.GetComponent<Collider>();
+        if (partCollider != null) partCollider.enabled = false;
+        Renderer renderer = part.GetComponent<Renderer>();
+        if (renderer == null) return null;
+
+        MaterialPropertyBlock properties = new MaterialPropertyBlock();
+        renderer.GetPropertyBlock(properties);
+        properties.SetColor("_BaseColor", color);
+        properties.SetColor("_Color", color);
+        properties.SetColor("_EmissionColor", emission);
+        renderer.SetPropertyBlock(properties);
+        return renderer;
+    }
+
+    private void UpdateMeleeWeaponTelegraph()
+    {
+        if (meleeBladeRenderer == null) return;
+
+        bool warning = combat != null && combat.IsMeleeTelegraphActive;
+        float pulse = warning ? 0.55f + Mathf.PingPong(Time.time * 5f, 0.45f) : 0f;
+        Color color = warning ? Color.Lerp(MeleeBladeColor, MeleeWarningColor, pulse) : MeleeBladeColor;
+        Color emission = warning ? color * 3.2f : MeleeBladeColor * 1.8f;
+        meleeBladeRenderer.GetPropertyBlock(meleeBladeProperties);
+        meleeBladeProperties.SetColor("_BaseColor", color);
+        meleeBladeProperties.SetColor("_Color", color);
+        meleeBladeProperties.SetColor("_EmissionColor", emission);
+        meleeBladeRenderer.SetPropertyBlock(meleeBladeProperties);
     }
 
     private void ChangeState(State next)
@@ -241,18 +643,27 @@ public class EnemyAI : MonoBehaviour
             return;
         }
 
+        if (agent.pathPending) return;
+
+        // A nearby boundary can interrupt the normal destination wait, but failed
+        // escape searches keep the same one-second retry delay as patrol searches.
+        if (Time.time >= nextPatrolBoundaryCheckTime)
+        {
+            nextPatrolBoundaryCheckTime = Time.time + Mathf.Max(0.05f, patrolBoundaryCheckInterval);
+            if (TryRedirectPatrolFromBoundary()) return;
+        }
+
+        if (Time.time < nextPatrolPickTime) return;
+
         if (!agent.hasPath || agent.pathStatus == NavMeshPathStatus.PathInvalid)
         {
             PickNewPatrolTarget(true);
             return;
         }
 
-        if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance + 0.1f)
+        if (agent.remainingDistance <= agent.stoppingDistance + 0.1f)
         {
-            if (Time.time >= nextPatrolPickTime)
-            {
-                PickNewPatrolTarget(false);
-            }
+            PickNewPatrolTarget(false);
         }
     }
 
@@ -279,7 +690,7 @@ public class EnemyAI : MonoBehaviour
         {
             nextRepathTime = Time.time + repathInterval;
             agent.isStopped = false;
-            agent.SetDestination(player.position);
+            agent.SetDestination(enemyType == EnemyType.Melee ? GetMeleeSurroundDestination() : player.position);
         }
 
         float dist = perception.DistanceToPlayer();
@@ -329,6 +740,44 @@ public class EnemyAI : MonoBehaviour
             TriggerAttackAnimation();
             combat.TryAttack();
         }
+    }
+
+    private Vector3 GetMeleeSurroundDestination()
+    {
+        int slotIndex = 0;
+        int ownId = GetInstanceID();
+        for (int i = ActiveEnemies.Count - 1; i >= 0; i--)
+        {
+            EnemyAI candidate = ActiveEnemies[i];
+            if (candidate == null)
+            {
+                ActiveEnemies.RemoveAt(i);
+                continue;
+            }
+            if (candidate == this || candidate.enemyType != EnemyType.Melee || candidate.player != player) continue;
+            if (candidate.health != null && candidate.health.IsDead) continue;
+            if (candidate.GetInstanceID() < ownId) slotIndex++;
+        }
+
+        Vector3 playerForward = player.forward;
+        playerForward.y = 0f;
+        if (playerForward.sqrMagnitude < 0.001f) playerForward = Vector3.forward;
+        Quaternion playerFacing = Quaternion.LookRotation(playerForward.normalized, Vector3.up);
+        Vector3 offset = CalculateSurroundOffset(slotIndex, meleeSurroundRadius, meleeSurroundRingSpacing);
+        Vector3 desired = player.position + playerFacing * offset;
+        if (NavMesh.SamplePosition(desired, out NavMeshHit sampled, meleeSurroundSampleRadius, NavMesh.AllAreas))
+            return sampled.position;
+        return player.position;
+    }
+
+    public static Vector3 CalculateSurroundOffset(int slotIndex, float innerRadius, float ringSpacing)
+    {
+        int safeIndex = Mathf.Max(0, slotIndex);
+        int ring = safeIndex / SurroundSlotsPerRing;
+        int slot = safeIndex % SurroundSlotsPerRing;
+        float angle = slot * (360f / SurroundSlotsPerRing) + ring * (180f / SurroundSlotsPerRing);
+        float radius = Mathf.Max(0.4f, innerRadius) + ring * Mathf.Max(0.4f, ringSpacing);
+        return Quaternion.AngleAxis(angle, Vector3.up) * Vector3.forward * radius;
     }
 
     private void UpdateRangedEvasion(float dist)
@@ -509,7 +958,7 @@ public class EnemyAI : MonoBehaviour
         if (!TryPickPatrolAreaPoint(out Vector3 target) &&
             !TryPickNearbyNavMeshPoint(out target))
         {
-            nextPatrolPickTime = Time.time + 1f;
+            SchedulePatrolRetry();
             return;
         }
 
@@ -518,11 +967,94 @@ public class EnemyAI : MonoBehaviour
         agent.isStopped = false;
         if (!agent.SetDestination(patrolTarget))
         {
-            nextPatrolPickTime = Time.time + 1f;
+            SchedulePatrolRetry();
             return;
         }
 
         nextPatrolPickTime = immediate ? Time.time : Time.time + Random.Range(2f, 5f);
+    }
+
+    private void SchedulePatrolRetry()
+    {
+        nextPatrolPickTime = Time.time + 1f;
+        nextPatrolBoundaryCheckTime = nextPatrolPickTime;
+    }
+
+    private bool TryRedirectPatrolFromBoundary()
+    {
+        if (!TryGetPatrolBoundaryDirection(transform.position, out Vector3 away)) return false;
+
+        Vector3 moveDirection = Vector3.ProjectOnPlane(agent.steeringTarget - transform.position, Vector3.up);
+        if (agent.hasPath && agent.pathStatus == NavMeshPathStatus.PathComplete &&
+            Vector3.Dot(moveDirection.normalized, away) > 0.35f) return false;
+
+        float distance = Mathf.Max(patrolBoundaryTurnDistance, (patrolBoundaryDistance + agent.radius) * 2f);
+        for (int i = 0; i < 5; i++)
+        {
+            float angle = i == 0 ? 0f : ((i + 1) / 2) * 35f * (i % 2 == 0 ? -1f : 1f);
+            Vector3 direction = Quaternion.AngleAxis(angle, Vector3.up) * away;
+            Vector3 candidate = transform.position + direction * distance;
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, 0.75f, agent.areaMask)) continue;
+            if (Vector3.Dot(hit.position - transform.position, away) < patrolBoundaryDistance) continue;
+            if (TryGetPatrolBoundaryDirection(hit.position, out _)) continue;
+            if (agent.Raycast(hit.position, out _) || !HasCompletePath(hit.position)) continue;
+            if (!agent.SetDestination(hit.position)) continue;
+
+            patrolTarget = hit.position;
+            agent.isStopped = false;
+            nextPatrolPickTime = Time.time + 1f;
+            return true;
+        }
+
+        // Do not keep pushing into the wall while waiting for a reachable escape.
+        agent.ResetPath();
+        SchedulePatrolRetry();
+        return true;
+    }
+
+    private bool TryGetPatrolBoundaryDirection(Vector3 position, out Vector3 away)
+    {
+        away = Vector3.zero;
+        float radius = Mathf.Max(0.1f, patrolBoundaryDistance) + agent.radius;
+        Vector3 center = position + Vector3.up * Mathf.Max(agent.radius, agent.height * 0.5f);
+        int count;
+        // Reuse the buffer; grow only when a crowded area fills it.
+        while (true)
+        {
+            count = Physics.OverlapSphereNonAlloc(center, radius, patrolBoundaryColliders,
+                Physics.AllLayers, QueryTriggerInteraction.Collide);
+            if (count < patrolBoundaryColliders.Length) break;
+            System.Array.Resize(ref patrolBoundaryColliders, patrolBoundaryColliders.Length * 2);
+        }
+
+        bool found = false;
+        for (int i = 0; i < count; i++)
+        {
+            Collider wall = patrolBoundaryColliders[i];
+            if (wall == null || wall.transform.IsChildOf(transform) || !IsPatrolBoundary(wall.transform)) continue;
+            Vector3 offset = Vector3.ProjectOnPlane(center - wall.ClosestPoint(center), Vector3.up);
+            if (offset.sqrMagnitude > radius * radius) continue;
+            if (offset.sqrMagnitude < 0.0001f)
+                offset = Vector3.ProjectOnPlane(center - wall.bounds.center, Vector3.up);
+            if (offset.sqrMagnitude < 0.0001f) offset = -transform.forward;
+            away += offset.normalized / Mathf.Max(offset.magnitude, 0.1f);
+            found = true;
+        }
+        System.Array.Clear(patrolBoundaryColliders, 0, count);
+
+        if (found)
+            away = away.sqrMagnitude > 0.0001f ? away.normalized : -transform.forward;
+        return found;
+    }
+
+    private bool IsPatrolBoundary(Transform candidate)
+    {
+        for (Transform current = candidate; current != null; current = current.parent)
+        {
+            // String comparison also works in scenes where the optional tag is not registered.
+            if (current.tag == PatrolBoundaryTag) return true;
+        }
+        return false;
     }
 
     private void ResolvePatrolAreas()
@@ -542,6 +1074,7 @@ public class EnemyAI : MonoBehaviour
             PatrolArea area = patrolAreas[Random.Range(0, patrolAreas.Length)];
             if (area == null) continue;
             if (!area.TryGetRandomNavMeshPoint(patrolAreaEdgeInset, patrolNavMeshSampleRadius, out Vector3 candidate)) continue;
+            if (TryGetPatrolBoundaryDirection(candidate, out _)) continue;
             if (!HasCompletePath(candidate)) continue;
 
             point = candidate;
@@ -558,6 +1091,7 @@ public class EnemyAI : MonoBehaviour
             Vector2 random = Random.insideUnitCircle.normalized * Random.Range(fallbackPatrolRadius * 0.35f, fallbackPatrolRadius);
             Vector3 candidate = transform.position + new Vector3(random.x, 0f, random.y);
             if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, patrolNavMeshSampleRadius, NavMesh.AllAreas)) continue;
+            if (TryGetPatrolBoundaryDirection(hit.position, out _)) continue;
             if (!HasCompletePath(hit.position)) continue;
 
             point = hit.position;
@@ -619,9 +1153,10 @@ public class EnemyAI : MonoBehaviour
         float maxSpeed = Mathf.Max(agent.speed, 0.01f);
         float speed01 = agent.isStopped ? 0f : Mathf.Clamp01(agent.velocity.magnitude / maxSpeed);
         bool isMoving = speed01 > 0.05f;
-        bool isAiming = canSee || state == State.Attack || state == State.PeekShoot;
+        bool isAiming = enemyType == EnemyType.Ranged && (canSee || state == State.Attack || state == State.PeekShoot);
 
         SetAnimatorFloat(moveSpeedParam, speed01);
+        SetAnimatorFloat(movementSpeedMultiplierParam, enemyType == EnemyType.Melee ? MeleeSpeedMultiplier : 1f);
         SetAnimatorBool(isGroundedParam, true);
         SetAnimatorBool(isSprintParam, isMoving && enemyType == EnemyType.Melee);
         SetAnimatorBool(isAimParam, isAiming);
@@ -630,6 +1165,17 @@ public class EnemyAI : MonoBehaviour
     private void TriggerAttackAnimation()
     {
         if (animator == null) return;
+
+        if (enemyType == EnemyType.Melee)
+        {
+            int meleeLayer = animator.GetLayerIndex(MeleeAnimationLayerName);
+            if (meleeLayer >= 0)
+            {
+                animator.SetLayerWeight(meleeLayer, 1f);
+                animator.Play(MeleeAttackStateName, meleeLayer, 0f);
+                return;
+            }
+        }
 
         if (HasAnimatorParam(attackTrigger, AnimatorControllerParameterType.Trigger))
         {

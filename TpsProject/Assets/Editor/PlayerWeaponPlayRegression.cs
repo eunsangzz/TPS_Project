@@ -44,7 +44,7 @@ public static class PlayerWeaponPlayRegression
             if (lastFrame == Time.frameCount) return;
             lastFrame = Time.frameCount;
             if (flow.MoveNext()) return;
-            Debug.Log("[PlayerWeaponPlayRegression] PASS: real numeric input, reload/switch timing, repeated stage refill, and delayed melee/cancellation.");
+            Debug.Log("[PlayerWeaponPlayRegression] PASS: real numeric input, full-magazine replacement reload, reload/switch timing, repeated stage refill, and delayed melee/cancellation.");
             Finish(0);
         }
         catch (Exception exception)
@@ -76,7 +76,6 @@ public static class PlayerWeaponPlayRegression
         WeaponData data = ScriptableObject.CreateInstance<WeaponData>();
         data.magazineSize = 30;
         data.reloadTime = 0.2f;
-        data.autoReloadWhenEmpty = false;
         Set(shooter, "weaponData", data);
         Set(shooter, "shooterCamera", camera);
         player.SetActive(true);
@@ -86,7 +85,11 @@ public static class PlayerWeaponPlayRegression
         PlayerMeleeAnimation animation = player.GetComponent<PlayerMeleeAnimation>();
         Expect(animation != null && animation.Available, "Actual avatar animation is unavailable in Play Mode.");
         WeaponRuntime runtime = (WeaponRuntime)typeof(ThirdPersonShooter).GetField("runtime", Private).GetValue(shooter);
+        Expect(loadout.SelectedSlot == 1 && !loadout.IsSlotUnlocked(2) && !loadout.IsSlotUnlocked(3),
+            "Play Mode did not start with melee-only progression.");
         Expect(shooter.AmmoInMag == 30 && shooter.ReserveAmmo == 60, "Play Mode initial ammo failed.");
+        loadout.UnlockWeapon(2);
+        loadout.UnlockWeapon(3);
 
         Keyboard keyboard = InputSystem.AddDevice<Keyboard>("WeaponTestKeyboard");
         InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
@@ -99,13 +102,15 @@ public static class PlayerWeaponPlayRegression
             InputSystem.Update();
             Invoke(input, "Update");
             Invoke(loadout, "Update");
-            Expect(loadout.SelectedSlot == (i == 0 ? 1 : 2), $"Key {i + 1}: requested={input.WeaponSlotPressed}, selected={loadout.SelectedSlot}.");
+            int expectedSlot = i == 0 ? 1 : i == 1 ? 2 : 3;
+            Expect(loadout.SelectedSlot == expectedSlot, $"Key {i + 1}: requested={input.WeaponSlotPressed}, selected={loadout.SelectedSlot}.");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState());
             InputSystem.Update();
             yield return null;
         }
         InputSystem.RemoveDevice(keyboard);
         input.enabled = false;
+        loadout.TrySelectSlot(2);
 
         for (int i = 0; i < 5; i++) runtime.ConsumeAmmo();
         Invoke(shooter, "TryStartReload");
@@ -116,6 +121,12 @@ public static class PlayerWeaponPlayRegression
         Expect(!shooter.IsReloading && shooter.AmmoInMag == 25 && shooter.ReserveAmmo == 60, "Cancelled reload completed later.");
 
         loadout.TrySelectSlot(2);
+        Invoke(shooter, "TryStartReload");
+        waitUntil = Time.time + 0.35f;
+        while (Time.time < waitUntil) yield return null;
+        Expect(!shooter.IsReloading && shooter.AmmoInMag == 30 && shooter.ReserveAmmo == 30,
+            "Completed reload topped up rounds instead of replacing the partial magazine.");
+        runtime.ConsumeAmmo();
         Invoke(shooter, "TryStartReload");
         GameObject stageObject = new GameObject("StageManager");
         stageObject.SetActive(false);

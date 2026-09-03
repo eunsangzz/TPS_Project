@@ -36,6 +36,36 @@ public static class EnemySpawnRegression
             Set(manager, "spawnBoundsSize", new Vector3(2f, 50f, 2f));
             Invoke(manager, "RebuildSpawnMesh");
 
+            GameObject meleePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/SciFiWarriorPBRHPPolyart/Prefabs/MeleeEnemy.prefab");
+            GameObject rangedPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/SciFiWarriorPBRHPPolyart/Prefabs/RangedEnemy.prefab");
+            Expect(meleePrefab != null && rangedPrefab != null, "Enemy prefab fixtures are missing.");
+            Set(manager, "enemyPrefabObjects", new[] { meleePrefab, rangedPrefab });
+            Set(manager, "currentStage", 1);
+            for (int i = 0; i < 32; i++)
+                Expect(PickPrefab(manager).name.Contains("Melee"), "Stage 1 selected a ranged enemy.");
+            Set(manager, "currentStage", 2);
+            bool selectedRanged = false;
+            for (int i = 0; i < 32; i++)
+                selectedRanged |= PickPrefab(manager).name.Contains("Ranged");
+            Expect(selectedRanged, "Ranged enemies never become available after stage 1.");
+
+            EnemyAI[] surrounders = new EnemyAI[3];
+            Vector3[] surroundDestinations = new Vector3[3];
+            for (int i = 0; i < surrounders.Length; i++)
+            {
+                surrounders[i] = new GameObject($"Surrounder {i}").AddComponent<EnemyAI>();
+                surrounders[i].enemyType = EnemyType.Melee;
+                surrounders[i].player = player;
+                Invoke(surrounders[i], "OnEnable");
+            }
+            for (int i = 0; i < surrounders.Length; i++)
+                surroundDestinations[i] = (Vector3)typeof(EnemyAI).GetMethod("GetMeleeSurroundDestination", Private).Invoke(surrounders[i], null);
+            for (int i = 0; i < surroundDestinations.Length; i++)
+                for (int j = i + 1; j < surroundDestinations.Length; j++)
+                    Expect(Vector3.Distance(surroundDestinations[i], surroundDestinations[j]) > 0.4f,
+                        "Melee enemies were assigned overlapping surround destinations.");
+            foreach (EnemyAI surrounder in surrounders) UnityEngine.Object.DestroyImmediate(surrounder.gameObject);
+
             int[] quadrants = new int[4];
             int corners = 0;
             for (int i = 0; i < 1000; i++)
@@ -96,7 +126,7 @@ public static class EnemySpawnRegression
                 }
                 Debug.Log($"[EnemySpawnRegression] Actual scene sample bounds: center={sampled.center}, size={sampled.size}");
             }
-            Debug.Log("[EnemySpawnRegression] PASS: map coverage, spacing, player distance, reachability, manual bounds, and no unsafe fallback.");
+            Debug.Log("[EnemySpawnRegression] PASS: distinct melee surround destinations, stage-1 melee-only roster, later ranged availability, map coverage, spacing, player distance, reachability, manual bounds, and no unsafe fallback.");
             EditorApplication.Exit(0);
         }
         catch (Exception exception)
@@ -121,6 +151,9 @@ public static class EnemySpawnRegression
         position = (Vector3)args[0];
         return found;
     }
+
+    private static GameObject PickPrefab(StageManager manager) =>
+        (GameObject)typeof(StageManager).GetMethod("PickEnemyPrefabObject", Private).Invoke(manager, null);
 
     private static void Set(object target, string name, object value) => target.GetType().GetField(name, Private).SetValue(target, value);
     private static void Invoke(object target, string name) => target.GetType().GetMethod(name, Private).Invoke(target, null);
