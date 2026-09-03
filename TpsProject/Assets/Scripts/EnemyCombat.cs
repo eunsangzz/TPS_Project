@@ -28,6 +28,11 @@ public class EnemyCombat : MonoBehaviour
     [Header("Shot Visuals")]
     public Color tracerColor = new Color(1f, 0.35f, 0.12f, 1f);
 
+    [Header("Ranged Audio")]
+    public AudioClip rangedFireClip;
+    [Range(0f, 1f)] public float rangedFireVolume = 0.7f;
+    [Min(2f)] public float rangedSoundDistance = 45f;
+
     [Header("Ranged Accuracy / Spread")]
     [Range(0f, 1f)] public float accuracy = 0.5f;
     public float spreadAngle = 18.0f;
@@ -50,6 +55,7 @@ public class EnemyCombat : MonoBehaviour
     private float pendingFireTime;
     private EnemyHealth health;
     private WeaponVFX weaponVFX;
+    private AudioSource fireAudioSource;
 
     private void Awake()
     {
@@ -174,6 +180,8 @@ public class EnemyCombat : MonoBehaviour
         Vector3 origin = firePoint != null && firePoint != self ? firePoint.position : fallbackOrigin;
         Vector3 targetPoint = player.position + Vector3.up * aimHeight;
 
+        if (Application.isPlaying) PlayRangedFireSound(origin);
+
         int shots = Mathf.Max(1, pelletCount);
 
         for (int i = 0; i < shots; i++)
@@ -237,6 +245,39 @@ public class EnemyCombat : MonoBehaviour
     private void OnDisable()
     {
         CancelPendingAttack();
+        if (fireAudioSource != null) fireAudioSource.Stop();
+    }
+
+    private void OnDestroy()
+    {
+        if (fireAudioSource != null) Destroy(fireAudioSource.gameObject);
+    }
+
+    private void PlayRangedFireSound(Vector3 origin)
+    {
+        if (rangedFireClip == null)
+        {
+            EnemyAudioData audioData = Resources.Load<EnemyAudioData>("EnemyAudioData");
+            if (audioData != null) rangedFireClip = audioData.rangedFireClip;
+        }
+        if (rangedFireClip == null) return;
+
+        if (fireAudioSource == null)
+        {
+            GameObject audioObject = new GameObject("EnemyGunAudio");
+            audioObject.transform.SetParent(transform, false);
+            fireAudioSource = audioObject.AddComponent<AudioSource>();
+            fireAudioSource.playOnAwake = false;
+            fireAudioSource.loop = false;
+            fireAudioSource.spatialBlend = 1f;
+            fireAudioSource.dopplerLevel = 0f;
+            fireAudioSource.rolloffMode = AudioRolloffMode.Linear;
+            fireAudioSource.minDistance = 2f;
+        }
+
+        fireAudioSource.transform.position = origin;
+        fireAudioSource.maxDistance = Mathf.Max(2f, rangedSoundDistance);
+        fireAudioSource.PlayOneShot(rangedFireClip, rangedFireVolume);
     }
 
     private Vector3 GetMissAimPoint(Vector3 targetPoint, Vector3 origin)

@@ -28,6 +28,9 @@ public class WeaponVFX : MonoBehaviour
     private Color activeTracerColor;
     private readonly List<LineRenderer> burstTracers = new List<LineRenderer>();
 
+    public Vector3 MuzzlePosition => muzzle != null ? muzzle.position :
+        transform.position + Vector3.up * 1.2f + transform.forward * 0.5f;
+
     public void PlayMuzzleFlash()
     {
         if (muzzleFlash != null) muzzleFlash.Play();
@@ -35,10 +38,10 @@ public class WeaponVFX : MonoBehaviour
 
     public void PlayTracer(Vector3 hitPoint)
     {
-        Vector3 origin = muzzle != null ? muzzle.position :
-            transform.position + Vector3.up * 1.2f + transform.forward * 0.5f;
-        PlayTracer(origin, hitPoint, tracerColor);
+        PlayTracerFromMuzzle(MuzzlePosition, hitPoint);
     }
+
+    public void PlayTracerFromMuzzle(Vector3 origin, Vector3 hitPoint) => PlayTracer(origin, hitPoint, tracerColor);
 
     public void PlayTracer(Vector3 origin, Vector3 hitPoint, Color color)
     {
@@ -61,11 +64,14 @@ public class WeaponVFX : MonoBehaviour
 
     public void PlayTracerBurst(IReadOnlyList<Vector3> hitPoints)
     {
+        PlayTracerBurstFromMuzzle(MuzzlePosition, hitPoints);
+    }
+
+    public void PlayTracerBurstFromMuzzle(Vector3 origin, IReadOnlyList<Vector3> hitPoints)
+    {
         if (hitPoints == null || hitPoints.Count == 0) return;
         EnsureTracer();
         EnsureBurstTracerCount(hitPoints.Count - 1);
-        Vector3 origin = muzzle != null ? muzzle.position :
-            transform.position + Vector3.up * 1.2f + transform.forward * 0.5f;
         ConfigureTracer(tracer, origin, hitPoints[0], tracerColor);
         for (int i = 1; i < hitPoints.Count; i++)
             ConfigureTracer(burstTracers[i - 1], origin, hitPoints[i], tracerColor);

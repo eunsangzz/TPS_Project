@@ -50,6 +50,16 @@ public class ThirdPersonShooter : MonoBehaviour
     private int stageAmmoCapacity;
     private int shotgunStageAmmoCapacity;
     private int sniperStageAmmoCapacity;
+    private Collider[] muzzleOverlapBuffer = new Collider[16];
+    private bool shotDamagedEnemy;
+    private bool ownsShotgunData;
+
+    private WeaponData.Stats StatsFor(WeaponData data)
+    {
+        PlayerSkill upgrade = data == sniperData ? PlayerSkill.SniperUpgrade :
+            data == shotgunData ? PlayerSkill.ShotgunUpgrade : PlayerSkill.RifleUpgrade;
+        return data.GetStats(skills != null ? skills.Level(upgrade) : 0);
+    }
 
     private bool ShotgunSelected => loadout != null && loadout.IsShotgunEquipped;
     private bool SniperSelected => loadout != null && loadout.IsSniperEquipped;
@@ -164,7 +174,7 @@ public class ThirdPersonShooter : MonoBehaviour
         WeaponData activeData = ActiveWeaponData;
         if (!activeRuntime.CanFire(Time.time)) return;
 
-        activeRuntime.SetNextFireTime(Time.time, activeData.fireRate);
+        activeRuntime.SetNextFireTime(Time.time, StatsFor(activeData).FireRate);
         ShootOnce();
     }
 
@@ -173,6 +183,8 @@ public class ThirdPersonShooter : MonoBehaviour
         WeaponRuntime activeRuntime = ActiveRuntime;
         WeaponData activeData = ActiveWeaponData;
         activeRuntime.ConsumeAmmo();
+        WeaponData.Stats stats = StatsFor(activeData);
+        shotDamagedEnemy = false;
         if (activeData.fireClip != null && fireAudioSource != null)
             fireAudioSource.PlayOneShot(activeData.fireClip, fireVolume);
         ShotFired?.Invoke(this, transform.position);
@@ -182,24 +194,31 @@ public class ThirdPersonShooter : MonoBehaviour
         bool isScoped = camCtrl != null && camCtrl.IsScoped;
 
         float spreadDeg =
-            isScoped ? activeData.scopeSpread :
-            isAiming ? activeData.shoulderSpread :
-            activeData.hipSpread;
+            isScoped ? stats.ScopeSpread :
+            isAiming ? stats.ShoulderSpread :
+            stats.HipSpread;
 
-        int pelletCount = Mathf.Max(1, activeData.pelletCount);
+        int pelletCount = stats.PelletCount;
+        Vector3 origin = weaponVFX != null ? weaponVFX.MuzzlePosition :
+            transform.position + Vector3.up * 1.2f + transform.forward * 0.5f;
+        Vector3 aimPoint = FindAimPoint(origin, activeData);
+        Vector3 aimDirection = (aimPoint - origin).normalized;
+        if (aimDirection.sqrMagnitude < 0.0001f) aimDirection = shooterCamera.transform.forward;
+        bool muzzleBlocked = IsMuzzleInsideObstacle(origin, activeData);
         var hitPoints = new System.Collections.Generic.List<Vector3>(pelletCount);
         for (int i = 0; i < pelletCount; i++)
         {
-            Vector3 dir = ApplySpread(shooterCamera.transform.forward, spreadDeg);
-            Ray ray = new Ray(shooterCamera.transform.position, dir);
-            hitPoints.Add(TraceShot(ray, activeData));
+            Vector3 dir = ApplySpread(aimDirection, spreadDeg);
+            Ray ray = new Ray(origin, dir);
+            hitPoints.Add(muzzleBlocked ? origin : TraceShot(ray, activeData));
         }
+        if (shotDamagedEnemy) skills?.OnAttackHit();
 
         if (weaponVFX != null)
         {
             weaponVFX.PlayMuzzleFlash();
-            if (pelletCount > 1) weaponVFX.PlayTracerBurst(hitPoints);
-            else weaponVFX.PlayTracer(hitPoints[0]);
+            if (pelletCount > 1) weaponVFX.PlayTracerBurstFromMuzzle(origin, hitPoints);
+            else weaponVFX.PlayTracerFromMuzzle(origin, hitPoints[0]);
         }
 
         if (animator != null)
@@ -222,7 +241,7 @@ public class ThirdPersonShooter : MonoBehaviour
         if (!IsGunEquipped || Time.timeScale <= 0f || (loadout != null && !loadout.CanAct) || (playerHealth != null && playerHealth.IsDead)) return;
         WeaponRuntime activeRuntime = ActiveRuntime;
         WeaponData activeData = ActiveWeaponData;
-        if (!activeRuntime.CanReload(activeData)) return;
+        if (!activeRuntime.CanReload(StatsFor(activeData).MagazineSize)) return;
         reloadRoutine = StartCoroutine(ReloadRoutine(activeRuntime, activeData));
     }
 
@@ -241,13 +260,57 @@ public class ThirdPersonShooter : MonoBehaviour
         if (animator != null && !string.IsNullOrEmpty(reloadTrigger))
             animator.SetTrigger(reloadTrigger);
 
-        yield return new WaitForSeconds(reloadingData.reloadTime);
+        yield return new WaitForSeconds(StatsFor(reloadingData).ReloadTime);
 
-        reloadingRuntime.FinishReload(reloadingData);
+        reloadingRuntime.FinishReload(StatsFor(reloadingData).MagazineSize);
         StopReloadAudio();
         reloadRoutine = null;
         PushAnimatorState();
     }
+
+    private Vector3 FindAimPoint(Vector3 muzzlePosition, WeaponData data)
+    {
+        Ray viewRay = shooterCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+        // The camera sits behind the player. Ignore targets behind the muzzle plane
+        // so a nearby camera obstruction cannot turn the shot back toward the player.
+        float muzzleDepth = Mathf.Max(0f, Vector3.Dot(muzzlePosition - viewRay.origin, viewRay.direction));
+        float closestDistance = muzzleDepth + data.range;
+        Vector3 aimPoint = viewRay.GetPoint(closestDistance);
+        foreach (RaycastHit hit in Physics.RaycastAll(viewRay, closestDistance, data.hitMask, QueryTriggerInteraction.Ignore))
+        {
+            if (hit.distance <= muzzleDepth || hit.distance >= closestDistance || IsOwnCollider(hit.collider)) continue;
+            EnemyHealth enemy = hit.collider.GetComponentInParent<EnemyHealth>();
+            if (enemy != null && enemy.IsDead) continue;
+            closestDistance = hit.distance;
+            aimPoint = hit.point;
+        }
+        return aimPoint;
+    }
+
+    private bool IsMuzzleInsideObstacle(Vector3 origin, WeaponData data)
+    {
+        // Raycasts miss surfaces when starting inside them. A tiny overlap probe
+        // prevents a muzzle clipped into a wall from firing through that wall.
+        int count;
+        while (true)
+        {
+            count = Physics.OverlapSphereNonAlloc(origin, 0.01f, muzzleOverlapBuffer, data.hitMask, QueryTriggerInteraction.Ignore);
+            if (count < muzzleOverlapBuffer.Length) break;
+            System.Array.Resize(ref muzzleOverlapBuffer, muzzleOverlapBuffer.Length * 2);
+        }
+        bool blocked = false;
+        for (int i = 0; i < count; i++)
+        {
+            Collider obstacle = muzzleOverlapBuffer[i];
+            if (!IsOwnCollider(obstacle) && obstacle.GetComponentInParent<IDamageable>() == null)
+                blocked = true;
+        }
+        System.Array.Clear(muzzleOverlapBuffer, 0, count);
+        return blocked;
+    }
+
+    private bool IsOwnCollider(Collider collider) => collider == null ||
+        collider.transform == transform || collider.transform.IsChildOf(transform);
 
     private Vector3 TraceShot(Ray ray, WeaponData data)
     {
@@ -258,11 +321,13 @@ public class ThirdPersonShooter : MonoBehaviour
         int limit = skills != null && skills.HasPiercing ? 2 : 1;
         foreach (RaycastHit hit in hits)
         {
-            if (hit.collider == null || hit.transform == transform || hit.transform.IsChildOf(transform)) continue;
+            if (IsOwnCollider(hit.collider)) continue;
             EnemyHealth enemy = hit.collider.GetComponentInParent<EnemyHealth>();
             if (enemy != null && (enemy.IsDead || !targets.Add(enemy))) continue;
-            float multiplier = (skills != null ? skills.GunDamageMultiplier : 1f) * (targets.Count > 1 ? 0.5f : 1f);
-            hit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(data.damage * multiplier, hit.point, ray.direction);
+            float multiplier = targets.Count > 1 ? 0.5f : 1f;
+            float healthBefore = enemy != null ? enemy.currentHealth : 0f;
+            hit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(StatsFor(data).Damage * multiplier, hit.point, ray.direction);
+            if (enemy != null && enemy.currentHealth < healthBefore) shotDamagedEnemy = true;
             if (weaponVFX != null)
             {
                 weaponVFX.PlayHitEffect(hit);
@@ -292,9 +357,9 @@ public class ThirdPersonShooter : MonoBehaviour
         stageAmmoCapacity = ammoPerStage + (skills != null ? skills.ConsumeStageAmmoBonus() : 0);
         shotgunStageAmmoCapacity = shotgunAmmoPerStage;
         sniperStageAmmoCapacity = sniperAmmoPerStage;
-        runtime.ResetAmmo(weaponData, stageAmmoCapacity);
-        shotgunRuntime.ResetAmmo(shotgunData, shotgunStageAmmoCapacity);
-        sniperRuntime.ResetAmmo(sniperData, sniperStageAmmoCapacity);
+        runtime.ResetAmmo(StatsFor(weaponData).MagazineSize, stageAmmoCapacity);
+        shotgunRuntime.ResetAmmo(StatsFor(shotgunData).MagazineSize, shotgunStageAmmoCapacity);
+        sniperRuntime.ResetAmmo(StatsFor(sniperData).MagazineSize, sniperStageAmmoCapacity);
         PushAnimatorState();
     }
 
@@ -337,6 +402,7 @@ public class ThirdPersonShooter : MonoBehaviour
     private void OnDestroy()
     {
         if (weaponAudioRoot != null) Destroy(weaponAudioRoot);
+        if (ownsShotgunData && shotgunData != null) Destroy(shotgunData);
     }
 
     private void EnsureShotgunData()
@@ -345,6 +411,7 @@ public class ThirdPersonShooter : MonoBehaviour
         shotgunData = Resources.Load<WeaponData>("ShotgunWeaponData");
         if (shotgunData != null) return;
         shotgunData = ScriptableObject.CreateInstance<WeaponData>();
+        ownsShotgunData = true;
         shotgunData.name = "Runtime Shotgun";
         shotgunData.damage = 15f;
         shotgunData.fireRate = 1.2f;
@@ -352,10 +419,18 @@ public class ThirdPersonShooter : MonoBehaviour
         shotgunData.pelletCount = 4;
         shotgunData.hitMask = weaponData.hitMask;
         shotgunData.magazineSize = 8;
-        shotgunData.reloadTime = 2.4f;
-        shotgunData.hipSpread = 7f;
-        shotgunData.shoulderSpread = 4f;
-        shotgunData.scopeSpread = 2f;
+        shotgunData.reloadTime = 3.6f;
+        shotgunData.hipSpread = 18f;
+        shotgunData.shoulderSpread = 14f;
+        shotgunData.scopeSpread = 14f;
+        shotgunData.upgradedDamage = 15f;
+        shotgunData.upgradedFireRate = 1.2f;
+        shotgunData.upgradedMagazineSize = 8;
+        shotgunData.upgradedPelletCount = 7;
+        shotgunData.upgradedReloadTime = 2.4f;
+        shotgunData.upgradedHipSpread = 7f;
+        shotgunData.upgradedShoulderSpread = 4f;
+        shotgunData.upgradedScopeSpread = 2f;
         shotgunData.fireMode = WeaponData.FireMode.Single;
     }
 

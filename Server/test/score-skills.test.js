@@ -65,6 +65,11 @@ test("score builds migrate and remain paired with their run", async (t) => {
 
   const bonus = [{ id: "FirstAid", level: 2 }, { id: "RifleUnlock", level: 1 }, { id: "SniperUnlock", level: 1 }, { id: "Supply", level: 1 }];
   assert.deepEqual((await save({ score: 4000, runId: runA, skills: bonus })).body.playerData.bestSkills, bonus);
+  const upgrades = ["LifeSteal", "RifleUpgrade", "ShotgunUpgrade", "SniperUpgrade"].map(id => ({ id, level: 3 }));
+  assert.deepEqual((await save({ score: 4500, runId: runB, skills: upgrades })).body.playerData.bestSkills, upgrades);
+  for (const skill of upgrades) {
+    assert.equal((await save({ score: 4600, runId: runB, skills: [{ ...skill, level: 4 }] })).status, 400);
+  }
   const oldClient = (await save({ score: 5000 })).body.playerData;
   assert.deepEqual(oldClient.bestSkills, []);
   assert.equal(oldClient.bestRunId, null);

@@ -22,7 +22,7 @@ public class ScoreSkillRecord
         if (skills != null)
             foreach (ScoreSkillRecord record in skills)
                 if (record != null && record.level > 0 && Enum.TryParse(record.id, out PlayerSkill skill) && Enum.IsDefined(typeof(PlayerSkill), skill))
-                    labels.Add($"{PlayerSkills.Title(skill)} {((int)skill < 6 ? "LV " : "x")}{record.level}");
+                    labels.Add($"{PlayerSkills.Title(skill)} {(PlayerSkills.IsPermanentUpgrade(skill) ? "LV " : "x")}{record.level}");
         return labels.Count == 0 ? "No skill record" : string.Join(" / ", labels);
     }
 }

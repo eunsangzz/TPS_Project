@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c67f13d3996a73e468eb72e53cb63697, type: 3}
   m_Name: SniperWeaponData
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
-  damage: 100
+  damage: 50
   fireRate: 1
   range: 500
   pelletCount: 1
@@ -20,10 +20,18 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   magazineSize: 1
-  reloadTime: 2.5
+  reloadTime: 4
   hipSpread: 4
   shoulderSpread: 1
   scopeSpread: 0
   fireMode: 0
+  upgradedDamage: 100
+  upgradedFireRate: 1
+  upgradedMagazineSize: 1
+  upgradedPelletCount: 1
+  upgradedReloadTime: 2.5
+  upgradedHipSpread: 4
+  upgradedShoulderSpread: 1
+  upgradedScopeSpread: 0
   fireClip: {fileID: 8300000, guid: 929fd214252d7034d93c9463bf63e091, type: 3}
   reloadClip: {fileID: 8300000, guid: 0eb673dc31e22fd4a8f158be386c8053, type: 3}

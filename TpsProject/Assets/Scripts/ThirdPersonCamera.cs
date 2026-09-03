@@ -371,7 +371,7 @@ public class ThirdPersonCamera : MonoBehaviour
             IsScoped ? scopedSensitivityMultiplier :
             (IsAiming ? shoulderSensitivityMultiplier : 1f);
 
-        float sens = mouseSensitivity * multiplier;
+        float sens = mouseSensitivity * GameSettings.MouseSensitivity * multiplier;
 
         yaw += look.x * sens;
         pitch -= look.y * sens;

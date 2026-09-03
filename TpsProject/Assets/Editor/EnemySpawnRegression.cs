@@ -153,7 +153,7 @@ public static class EnemySpawnRegression
     }
 
     private static GameObject PickPrefab(StageManager manager) =>
-        (GameObject)typeof(StageManager).GetMethod("PickEnemyPrefabObject", Private).Invoke(manager, null);
+        (GameObject)typeof(StageManager).GetMethod("PickEnemyPrefabObject", Private).Invoke(manager, new object[] { manager.CurrentStage == 1 || UnityEngine.Random.value < 0.5f ? EnemyType.Melee : EnemyType.Ranged });
 
     private static void Set(object target, string name, object value) => target.GetType().GetField(name, Private).SetValue(target, value);
     private static void Invoke(object target, string name) => target.GetType().GetMethod(name, Private).Invoke(target, null);

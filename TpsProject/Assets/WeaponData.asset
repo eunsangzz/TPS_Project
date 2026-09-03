@@ -12,17 +12,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c67f13d3996a73e468eb72e53cb63697, type: 3}
   m_Name: WeaponData
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
-  damage: 20
-  fireRate: 10
+  damage: 12
+  fireRate: 6
   range: 200
   hitMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  magazineSize: 30
+  magazineSize: 15
   reloadTime: 2
   hipSpread: 2.5
   shoulderSpread: 1.2
   scopeSpread: 0.25
   fireMode: 1
+  upgradedDamage: 20
+  upgradedFireRate: 10
+  upgradedMagazineSize: 30
+  upgradedPelletCount: 1
+  upgradedReloadTime: 2
+  upgradedHipSpread: 2.5
+  upgradedShoulderSpread: 1.2
+  upgradedScopeSpread: 0.25
   fireClip: {fileID: 8300000, guid: 08f78eba48bb21c44ac5a74ca84efc83, type: 3}
   reloadClip: {fileID: 8300000, guid: 6a32a0d49cd240b4cb9934adf37a49a5, type: 3}

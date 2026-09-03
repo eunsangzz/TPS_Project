@@ -76,7 +76,7 @@ public class SkillSelectionUI : MonoBehaviour
             card.Title.text = PlayerSkills.Title(skill);
             card.Description.text = PlayerSkills.Description(skill);
             card.Level.text = PlayerSkills.IsWeaponUnlock(skill) ? "WEAPON UNLOCK" :
-                (int)skill < 6 ? $"LV {owner.Level(skill)} > {owner.Level(skill) + 1}   /   MAX {PlayerSkills.MaxLevel(skill)}" : "BONUS REWARD";
+                PlayerSkills.IsPermanentUpgrade(skill) ? $"LV {owner.Level(skill)} > {owner.Level(skill) + 1}   /   MAX {PlayerSkills.MaxLevel(skill)}" : "BONUS REWARD";
             card.Action.text = PlayerSkills.IsWeaponUnlock(skill) ? "UNLOCK  >" : "ACQUIRE  >";
             card.Action.color = accent;
             card.Button.interactable = true;
@@ -203,7 +203,7 @@ public class SkillSelectionUI : MonoBehaviour
                 Place(card.Title.rectTransform, 62f, 31f, cardWidth - 76f, 26f);
                 card.Title.fontSize = 19;
                 card.Description.fontSize = 16;
-                Place(card.Description.rectTransform, 16f, 66f, cardWidth - 32f, 46f);
+                Place(card.Description.rectTransform, 16f, 66f, cardWidth - 32f, 56f);
                 Place(card.Level.rectTransform, 16f, 124f, cardWidth - 110f, 20f);
                 Place(card.Action.rectTransform, cardWidth - 96f, 123f, 84f, 22f);
                 card.Action.fontSize = 14;

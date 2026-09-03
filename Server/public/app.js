@@ -13,6 +13,7 @@ const skillNames = {
   WideSwing: "넓은 휘두르기", AmmoRecovery: "탄약 회수", Toughness: "강인함",
   FirstAid: "응급 처치", Vitality: "체력 보강", Supply: "보급 지원",
   RifleUnlock: "소총 해금", ShotgunUnlock: "샷건 해금", SniperUnlock: "저격총 해금",
+  LifeSteal: "흡혈", RifleUpgrade: "라이플 강화", ShotgunUpgrade: "샷건 강화", SniperUpgrade: "저격총 강화",
 };
 
 function renderSkills(container, records, collapsible = false) {

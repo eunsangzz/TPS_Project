@@ -3,6 +3,7 @@ const limits = new Map([
   ["WideSwing", 3], ["AmmoRecovery", 3], ["Toughness", 3],
   ["FirstAid", 999999], ["Vitality", 999999], ["Supply", 999999],
   ["RifleUnlock", 1], ["ShotgunUnlock", 1], ["SniperUnlock", 1],
+  ["LifeSteal", 3], ["RifleUpgrade", 3], ["ShotgunUpgrade", 3], ["SniperUpgrade", 3],
 ]);
 
 function parseScoreSkills(value = []) {

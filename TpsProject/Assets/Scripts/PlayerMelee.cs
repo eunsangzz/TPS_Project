@@ -90,6 +90,7 @@ public class PlayerMelee : MonoBehaviour
     {
         Vector3 origin = transform.position + Vector3.up;
         hitEnemies.Clear();
+        bool damagedEnemy = false;
         float reach = skills != null ? skills.MeleeReachMultiplier : 1f;
         float attackArc = Mathf.Min(180f, arc * reach);
         foreach (Collider collider in Physics.OverlapSphere(origin, range * reach, hitMask, QueryTriggerInteraction.Ignore))
@@ -102,9 +103,12 @@ public class PlayerMelee : MonoBehaviour
             if (horizontal.sqrMagnitude > 0.001f && Vector3.Angle(attackDirection, horizontal) > attackArc * 0.5f) continue;
             if (IsBlocked(origin, point, enemy)) continue;
             hitEnemies.Add(enemy);
+            float healthBefore = enemy.currentHealth;
             enemy.TakeDamage(damage * (skills != null ? skills.MeleeDamageMultiplier : 1f), point, attackDirection);
+            if (enemy.currentHealth < healthBefore) damagedEnemy = true;
             if (enemy.IsDead && skills != null) skills.OnMeleeKill();
         }
+        if (damagedEnemy) skills?.OnAttackHit();
     }
 
     private bool IsBlocked(Vector3 origin, Vector3 point, EnemyHealth target)

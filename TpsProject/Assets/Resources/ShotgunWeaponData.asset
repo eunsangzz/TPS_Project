@@ -20,10 +20,18 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   magazineSize: 8
-  reloadTime: 2.4
-  hipSpread: 7
-  shoulderSpread: 4
-  scopeSpread: 2
+  reloadTime: 3.6
+  hipSpread: 18
+  shoulderSpread: 14
+  scopeSpread: 14
   fireMode: 0
+  upgradedDamage: 15
+  upgradedFireRate: 1.2
+  upgradedMagazineSize: 8
+  upgradedPelletCount: 7
+  upgradedReloadTime: 2.4
+  upgradedHipSpread: 7
+  upgradedShoulderSpread: 4
+  upgradedScopeSpread: 2
   fireClip: {fileID: 8300000, guid: 947719fd38845824ba3638af9d8e4e54, type: 3}
   reloadClip: {fileID: 8300000, guid: 8f268095f67575b44b10ea19a4482b2c, type: 3}

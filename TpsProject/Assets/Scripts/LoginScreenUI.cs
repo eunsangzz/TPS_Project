@@ -26,6 +26,7 @@ public class LoginScreenUI : MonoBehaviour
     private Canvas loginCanvas;
     private bool enteringGame;
     private bool refreshAfterLoad;
+    private GameObject settingsPanel;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void CreateInLoginScene()
@@ -88,6 +89,7 @@ public class LoginScreenUI : MonoBehaviour
 
     private void OnDisable()
     {
+        GameSettings.Save();
         if (session == null) return;
 
         session.AuthClient.SignedIn -= HandleSignedIn;
@@ -147,6 +149,8 @@ public class LoginScreenUI : MonoBehaviour
         fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         CreateText("Title", panelObject.transform, "TPS PROJECT", 32, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(0.92f, 0.96f, 1f, 1f), 42f);
+        CreateButton(panelObject.transform, "SettingsButton", "SETTINGS", ToggleSettings);
+        BuildSettings(panelObject.transform);
         personalBest = CreateText("PersonalBest", panelObject.transform, "", 14, FontStyle.Normal, TextAnchor.MiddleLeft, new Color(1f, 0.8f, 0.35f), 36f);
         personalSkills = CreateText("PersonalSkills", panelObject.transform, "", 13, FontStyle.Normal, TextAnchor.UpperLeft, new Color(0.68f, 0.85f, 0.8f), 24f);
 
@@ -177,6 +181,88 @@ public class LoginScreenUI : MonoBehaviour
             skillRecords[i] = CreateText("RankSkills" + i, panelObject.transform, "", 13, FontStyle.Normal, TextAnchor.UpperLeft, new Color(0.68f, 0.78f, 0.8f), 24f);
         }
         refreshButton = CreateButton(panelObject.transform, "RefreshRanking", "REFRESH RANKING", RefreshLeaderboard);
+    }
+
+    private void ToggleSettings()
+    {
+        bool show = !settingsPanel.activeSelf;
+        settingsPanel.SetActive(show);
+        if (!show) GameSettings.Save();
+    }
+
+    private void OnApplicationPause(bool paused)
+    {
+        if (paused) GameSettings.Save();
+    }
+
+    private void OnApplicationQuit() => GameSettings.Save();
+
+    private void BuildSettings(Transform parent)
+    {
+        settingsPanel = new GameObject("SettingsPanel", typeof(RectTransform), typeof(Image),
+            typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        settingsPanel.transform.SetParent(parent, false);
+        settingsPanel.GetComponent<Image>().color = new Color(0.09f, 0.13f, 0.17f, 1f);
+        VerticalLayoutGroup layout = settingsPanel.GetComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(16, 16, 12, 12);
+        layout.spacing = 6f;
+        layout.childControlWidth = true;
+        layout.childControlHeight = false;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+        settingsPanel.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        Text sensitivity = CreateText("SensitivityLabel", settingsPanel.transform,
+            $"MOUSE SENSITIVITY   {GameSettings.MouseSensitivity:0.00}x", 15, FontStyle.Bold,
+            TextAnchor.MiddleLeft, Color.white, 28f);
+        CreateSettingsSlider("MouseSensitivity", GameSettings.MinSensitivity, GameSettings.MaxSensitivity,
+            GameSettings.MouseSensitivity, value =>
+            {
+                GameSettings.SetMouseSensitivity(value);
+                sensitivity.text = $"MOUSE SENSITIVITY   {GameSettings.MouseSensitivity:0.00}x";
+            });
+        Text volume = CreateText("VolumeLabel", settingsPanel.transform,
+            $"MASTER VOLUME   {GameSettings.MasterVolume * 100f:0}%", 15, FontStyle.Bold,
+            TextAnchor.MiddleLeft, Color.white, 28f);
+        CreateSettingsSlider("MasterVolume", 0f, 1f, GameSettings.MasterVolume, value =>
+        {
+            GameSettings.SetMasterVolume(value);
+            volume.text = $"MASTER VOLUME   {GameSettings.MasterVolume * 100f:0}%";
+        });
+        CreateText("SettingsHint", settingsPanel.transform, "Applies immediately. Saved when closed.", 12,
+            FontStyle.Normal, TextAnchor.MiddleLeft, new Color(0.68f, 0.76f, 0.82f), 22f);
+        CreateButton(settingsPanel.transform, "CloseSettings", "DONE", ToggleSettings);
+        settingsPanel.SetActive(false);
+    }
+
+    private void CreateSettingsSlider(string objectName, float min, float max, float value,
+        UnityEngine.Events.UnityAction<float> changed)
+    {
+        GameObject root = new GameObject(objectName, typeof(RectTransform), typeof(Image), typeof(Slider));
+        root.transform.SetParent(settingsPanel.transform, false);
+        SetLayoutHeight(root, 32f);
+        root.GetComponent<Image>().color = new Color(0.13f, 0.19f, 0.24f);
+        Slider slider = root.GetComponent<Slider>();
+        slider.minValue = min;
+        slider.maxValue = max;
+
+        Image track = CreateImage("Track", root.transform, new Color(0.25f, 0.33f, 0.39f));
+        Inset(track.rectTransform, 12f, 12f);
+        track.raycastTarget = false;
+        Image fill = CreateImage("Fill", track.transform, new Color(0.12f, 0.7f, 0.76f));
+        Stretch(fill.rectTransform);
+        fill.raycastTarget = false;
+        slider.fillRect = fill.rectTransform;
+
+        GameObject handleArea = new GameObject("HandleArea", typeof(RectTransform));
+        handleArea.transform.SetParent(root.transform, false);
+        Inset(handleArea.GetComponent<RectTransform>(), 12f, 0f);
+        Image handle = CreateImage("Handle", handleArea.transform, Color.white);
+        handle.rectTransform.sizeDelta = new Vector2(18f, 28f);
+        slider.handleRect = handle.rectTransform;
+        slider.targetGraphic = handle;
+        slider.SetValueWithoutNotify(value);
+        slider.onValueChanged.AddListener(changed);
     }
 
     private Text CreateRowCell(Transform parent, string name, float left, float right, TextAnchor alignment)

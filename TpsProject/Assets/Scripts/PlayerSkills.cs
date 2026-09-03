@@ -4,13 +4,17 @@ using UnityEngine;
 public enum PlayerSkill
 {
     PowerRounds, PiercingRounds, HeavyStrike, WideSwing, AmmoRecovery, Toughness,
-    FirstAid, Vitality, Supply, RifleUnlock, ShotgunUnlock, SniperUnlock
+    FirstAid, Vitality, Supply, RifleUnlock, ShotgunUnlock, SniperUnlock,
+    LifeSteal, RifleUpgrade, ShotgunUpgrade, SniperUpgrade
 }
 
 [DisallowMultipleComponent]
 public class PlayerSkills : MonoBehaviour
 {
-    private readonly int[] levels = new int[6];
+    [Header("Reward Odds")]
+    [SerializeField, Min(1f)] private float weaponUpgradeOfferWeight = 1.5f;
+
+    private readonly int[] levels = new int[(int)PlayerSkill.SniperUpgrade + 1];
     private readonly int[] bonusSelections = new int[3];
     private bool rifleUnlocked;
     private bool shotgunUnlocked;
@@ -18,7 +22,7 @@ public class PlayerSkills : MonoBehaviour
     public string RunId { get; } = System.Guid.NewGuid().ToString("N");
     public int SelectionCount { get; private set; }
     private int nextStageAmmo;
-    public float GunDamageMultiplier => 1f + 0.2f * Level(PlayerSkill.PowerRounds);
+    public float LifeStealHealing => Level(PlayerSkill.LifeSteal) == 0 ? 0f : 0.5f + 0.5f * Level(PlayerSkill.LifeSteal);
     public float MeleeDamageMultiplier => 1f + 0.25f * Level(PlayerSkill.HeavyStrike);
     public float MeleeReachMultiplier => 1f + 0.2f * Level(PlayerSkill.WideSwing);
     public bool HasPiercing => Level(PlayerSkill.PiercingRounds) > 0;
@@ -32,15 +36,22 @@ public class PlayerSkills : MonoBehaviour
         _ => (int)skill >= 0 && (int)skill < levels.Length ? levels[(int)skill] : 0
     };
     public static int MaxLevel(PlayerSkill skill) =>
-        skill == PlayerSkill.PiercingRounds || IsWeaponUnlock(skill) ? 1 : (int)skill < 6 ? 3 : int.MaxValue;
-    public bool CanAcquire(PlayerSkill skill) => EnumIsDefined(skill) && Level(skill) < MaxLevel(skill);
+        skill == PlayerSkill.PiercingRounds || IsWeaponUnlock(skill) ? 1 : IsPermanentUpgrade(skill) ? 3 : int.MaxValue;
+    public bool CanAcquire(PlayerSkill skill) => EnumIsDefined(skill) && skill != PlayerSkill.PowerRounds &&
+        Level(skill) < MaxLevel(skill) && (skill switch
+        {
+            PlayerSkill.RifleUpgrade => rifleUnlocked,
+            PlayerSkill.ShotgunUpgrade => shotgunUnlocked,
+            PlayerSkill.SniperUpgrade => sniperUnlocked,
+            _ => true
+        });
 
     public bool Acquire(PlayerSkill skill)
     {
         PlayerHealth health = GetComponent<PlayerHealth>();
         if (!CanAcquire(skill) || (health != null && health.IsDead)) return false;
-        if ((int)skill < levels.Length) levels[(int)skill]++;
-        else if ((int)skill <= (int)PlayerSkill.Supply) bonusSelections[(int)skill - levels.Length]++;
+        if (IsPermanentUpgrade(skill)) levels[(int)skill]++;
+        else if ((int)skill >= (int)PlayerSkill.FirstAid && (int)skill <= (int)PlayerSkill.Supply) bonusSelections[(int)skill - (int)PlayerSkill.FirstAid]++;
         else if (skill == PlayerSkill.RifleUnlock) rifleUnlocked = true;
         else if (skill == PlayerSkill.ShotgunUnlock) shotgunUnlocked = true;
         else if (skill == PlayerSkill.SniperUnlock) sniperUnlocked = true;
@@ -71,12 +82,12 @@ public class PlayerSkills : MonoBehaviour
 
         var available = new List<PlayerSkill>();
         for (int i = 0; i < levels.Length; i++)
-            if (CanAcquire((PlayerSkill)i)) available.Add((PlayerSkill)i);
-        Shuffle(available);
-        foreach (PlayerSkill skill in available)
+            if (IsPermanentUpgrade((PlayerSkill)i) && CanAcquire((PlayerSkill)i)) available.Add((PlayerSkill)i);
+        while (offers.Count < 3 && available.Count > 0)
         {
-            if (offers.Count == 3) break;
-            offers.Add(skill);
+            int selected = PickWeightedUpgrade(available);
+            offers.Add(available[selected]);
+            available.RemoveAt(selected);
         }
         // Repeatable supplies keep three distinct choices after permanent upgrades are capped.
         if (offers.Count < 3)
@@ -92,6 +103,26 @@ public class PlayerSkills : MonoBehaviour
         Shuffle(offers);
         return offers.ToArray();
     }
+
+    private int PickWeightedUpgrade(List<PlayerSkill> available)
+    {
+        float totalWeight = 0f;
+        foreach (PlayerSkill skill in available) totalWeight += OfferWeight(skill);
+        float roll = Random.value * totalWeight;
+        for (int i = 0; i < available.Count; i++)
+        {
+            roll -= OfferWeight(available[i]);
+            if (roll < 0f) return i;
+        }
+        return available.Count - 1;
+    }
+
+    private float OfferWeight(PlayerSkill skill) => skill switch
+    {
+        PlayerSkill.RifleUpgrade or PlayerSkill.ShotgunUpgrade or PlayerSkill.SniperUpgrade =>
+            Mathf.Max(1f, weaponUpgradeOfferWeight),
+        _ => 1f
+    };
 
     private static void Shuffle(List<PlayerSkill> values)
     {
@@ -111,12 +142,18 @@ public class PlayerSkills : MonoBehaviour
 
     public void OnMeleeKill() => GetComponent<ThirdPersonShooter>()?.RecoverAmmo(AmmoPerMeleeKill);
 
+    public void OnAttackHit()
+    {
+        if (LifeStealHealing > 0f) GetComponent<PlayerHealth>()?.Heal(LifeStealHealing);
+    }
+
     public ScoreSkillRecord[] CreateScoreSnapshot()
     {
         var snapshot = new List<ScoreSkillRecord>();
-        for (int i = 0; i <= (int)PlayerSkill.SniperUnlock; i++)
+        for (int i = 0; i < levels.Length; i++)
         {
-            int count = i < levels.Length ? levels[i] : i <= (int)PlayerSkill.Supply ? bonusSelections[i - levels.Length] : Level((PlayerSkill)i);
+            int count = i >= (int)PlayerSkill.FirstAid && i <= (int)PlayerSkill.Supply
+                ? bonusSelections[i - (int)PlayerSkill.FirstAid] : Level((PlayerSkill)i);
             if (count > 0) snapshot.Add(new ScoreSkillRecord { id = ((PlayerSkill)i).ToString(), level = count });
         }
         return snapshot.ToArray();
@@ -147,6 +184,10 @@ public class PlayerSkills : MonoBehaviour
         PlayerSkill.RifleUnlock => "UNLOCK RIFLE",
         PlayerSkill.ShotgunUnlock => "UNLOCK SHOTGUN",
         PlayerSkill.SniperUnlock => "UNLOCK SNIPER",
+        PlayerSkill.LifeSteal => "LIFE STEAL",
+        PlayerSkill.RifleUpgrade => "RIFLE UPGRADE",
+        PlayerSkill.ShotgunUpgrade => "SHOTGUN UPGRADE",
+        PlayerSkill.SniperUpgrade => "SNIPER UPGRADE",
         _ => "UNKNOWN"
     };
 
@@ -161,15 +202,21 @@ public class PlayerSkills : MonoBehaviour
         PlayerSkill.FirstAid => "Restore 40 health",
         PlayerSkill.Vitality => "+5 max health\nRestore 5 health",
         PlayerSkill.Supply => "+15 ammo for the next stage only",
-        PlayerSkill.RifleUnlock => "Unlock slot 2\nAutomatic rifle / 90 rounds",
-        PlayerSkill.ShotgunUnlock => "Unlock slot 3\n4 pellets per blast / 32 shells",
-        PlayerSkill.SniperUnlock => "Unlock slot 4 / 6x scope\n100 damage / 1-shot magazine / 10 rounds",
+        PlayerSkill.RifleUnlock => "12 damage / 6 shots per second\n15-round magazine / 90 rounds",
+        PlayerSkill.ShotgunUnlock => "4 x 15 damage / close range\nWide spread / 3.6s reload / 32 shells",
+        PlayerSkill.SniperUnlock => "Slot 4 / 6x scope / 10 rounds\n50 damage / 1-shot magazine / 4s reload",
+        PlayerSkill.LifeSteal => "On hit: heal 1 / 1.5 / 2 HP\nOnce per attack (all weapons)",
+        PlayerSkill.RifleUpgrade => "Damage, fire rate, magazine up\nMax: 20 dmg / 10 rps / 30 rounds",
+        PlayerSkill.ShotgunUpgrade => "+1 pellet / spread & reload improved\nMax: 7 pellets / 2.4s reload",
+        PlayerSkill.SniperUpgrade => "More damage / faster reload\nMax: 100 damage / 2.5s reload",
         _ => ""
     };
 
     public static string Category(PlayerSkill skill) => skill switch
     {
-        PlayerSkill.PowerRounds or PlayerSkill.PiercingRounds => "RIFLE",
+        PlayerSkill.PowerRounds or PlayerSkill.PiercingRounds or PlayerSkill.RifleUpgrade => "RIFLE",
+        PlayerSkill.ShotgunUpgrade => "SHOTGUN",
+        PlayerSkill.SniperUpgrade => "SNIPER",
         PlayerSkill.HeavyStrike or PlayerSkill.WideSwing => "MELEE",
         PlayerSkill.AmmoRecovery or PlayerSkill.Supply => "SUPPLY",
         PlayerSkill.RifleUnlock or PlayerSkill.ShotgunUnlock or PlayerSkill.SniperUnlock => "WEAPON",
@@ -179,6 +226,8 @@ public class PlayerSkills : MonoBehaviour
     public static Color Accent(PlayerSkill skill) => Category(skill) switch
     {
         "RIFLE" => new Color(0.24f, 0.83f, 0.88f),
+        "SHOTGUN" => new Color(0.95f, 0.58f, 0.3f),
+        "SNIPER" => new Color(0.6f, 0.65f, 1f),
         "MELEE" => new Color(1f, 0.72f, 0.28f),
         "SUPPLY" => new Color(0.95f, 0.48f, 0.42f),
         "WEAPON" => new Color(0.38f, 0.66f, 1f),
@@ -189,5 +238,9 @@ public class PlayerSkills : MonoBehaviour
         skill == PlayerSkill.RifleUnlock || skill == PlayerSkill.ShotgunUnlock || skill == PlayerSkill.SniperUnlock;
 
     private static bool EnumIsDefined(PlayerSkill skill) =>
-        (int)skill >= 0 && (int)skill <= (int)PlayerSkill.SniperUnlock;
+        (int)skill >= 0 && (int)skill <= (int)PlayerSkill.SniperUpgrade;
+
+    public static bool IsPermanentUpgrade(PlayerSkill skill) =>
+        ((int)skill >= 0 && (int)skill < (int)PlayerSkill.FirstAid) ||
+        (skill >= PlayerSkill.LifeSteal && skill <= PlayerSkill.SniperUpgrade);
 }
