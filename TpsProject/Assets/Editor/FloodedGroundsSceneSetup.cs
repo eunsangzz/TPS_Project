@@ -319,7 +319,8 @@ public static class FloodedGroundsSceneSetup
 
             perception.viewDistance = 1200f;
             perception.rangedDetectDistance = 1200f;
-            perception.viewAngleTotal = 360f;
+            perception.viewAngleTotal = 240f;
+            perception.horizontalViewAngleTotal = 240f;
             perception.useLineOfSight = true;
 
             if (enemy.player == null)
@@ -519,6 +520,7 @@ public static class FloodedGroundsSceneSetup
         serializedManager.FindProperty("navMeshSampleRadius").floatValue = 8f;
         serializedManager.FindProperty("spawnAttemptsPerEnemy").intValue = 100;
         serializedManager.FindProperty("mapWideDetectDistance").floatValue = 1200f;
+        serializedManager.FindProperty("meleeHorizontalVisionAngle").floatValue = 240f;
         serializedManager.FindProperty("rangedVisionDistance").floatValue = 2400f;
         serializedManager.FindProperty("rangedHorizontalVisionAngle").floatValue = 30f;
         serializedManager.FindProperty("rangedVerticalVisionUp").floatValue = 70f;

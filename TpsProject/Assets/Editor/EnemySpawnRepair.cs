@@ -69,8 +69,9 @@ public static class EnemySpawnRepair
             collider.direction = 1;
 
             EnemyHealth health = EnsureComponent<EnemyHealth>(root);
-            health.maxHealth = 100f;
-            health.currentHealth = 100f;
+            float startingHealth = EnemyHealth.GetStartingHealth(enemyType);
+            health.maxHealth = startingHealth;
+            health.currentHealth = startingHealth;
 
             EnemyAI ai = EnsureComponent<EnemyAI>(root);
             ai.enemyType = enemyType;
@@ -93,7 +94,7 @@ public static class EnemySpawnRepair
             perception.player = null;
             perception.viewDistance = enemyType == EnemyType.Ranged ? 2400f : 1200f;
             perception.rangedDetectDistance = enemyType == EnemyType.Ranged ? 2400f : 1200f;
-            perception.horizontalViewAngleTotal = enemyType == EnemyType.Ranged ? 30f : 360f;
+            perception.horizontalViewAngleTotal = enemyType == EnemyType.Ranged ? 30f : 240f;
             perception.viewAngleTotal = perception.horizontalViewAngleTotal;
             perception.verticalViewAngleUp = 70f;
             perception.verticalViewAngleDown = 70f;

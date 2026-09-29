@@ -4,6 +4,9 @@ using System;
 
 public class EnemyHealth : MonoBehaviour, IDamageable
 {
+    public const float MeleeStartingHealth = 120f;
+    public const float RangedStartingHealth = 75f;
+
     public event Action<EnemyHealth> Died;
     public event Action<EnemyHealth, Vector3, Vector3> Damaged;
 
@@ -26,6 +29,11 @@ public class EnemyHealth : MonoBehaviour, IDamageable
 
     public bool IsDead => isDead || currentHealth <= 0f;
     public bool HasTakenDamage { get; private set; }
+
+    public static float GetStartingHealth(EnemyType enemyType)
+    {
+        return enemyType == EnemyType.Ranged ? RangedStartingHealth : MeleeStartingHealth;
+    }
 
     private void Awake()
     {

@@ -112,18 +112,18 @@ public static class MuzzleShotPlayChecks
             Require(Mathf.Abs(health.currentHealth - (before - damage)) < 0.01f, "Off-center muzzle failed to converge on center target.");
             Require(shooter.AmmoInMag == ammoBefore - 1, "One shot consumed incorrect ammunition.");
             var tracer = (LineRenderer)Get(vfx, "tracer");
-            Require(Vector3.Distance(tracer.GetPosition(0), muzzle.transform.position) < 0.001f, "Tracer did not start at physical muzzle.");
+            Require(Vector3.Distance(tracer.GetPosition(0), muzzle.transform.position) < 0.001f, "Hip/shoulder tracer did not start at physical muzzle.");
             foreach (LineRenderer line in root.GetComponentsInChildren<LineRenderer>())
-                if (line.enabled) Require(Vector3.Distance(line.GetPosition(0), muzzle.transform.position) < 0.001f, "Pellet tracer origin differs from muzzle.");
+                if (line.enabled) Require(Vector3.Distance(line.GetPosition(0), muzzle.transform.position) < 0.001f, "Hip/shoulder pellet tracer origin differs from muzzle.");
 
             // This wall blocks the muzzle's ray but leaves the camera center ray clear.
             var wall = Wall(new Vector3(0.75f,1.25f,1.2f), new Vector3(0.6f,0.8f,0.15f));
             Require(!Physics.Raycast(camera.ViewportPointToRay(new Vector3(0.5f,0.5f,0)), out RaycastHit cameraHit, 5f) || cameraHit.collider != wall.GetComponent<Collider>(), "Wall fixture unexpectedly blocks camera.");
             before = health.currentHealth; Fire(shooter, runtime, data);
-            Require(health.currentHealth == before && tracer.GetPosition(1).z < 1.3f, "Shot passed through muzzle-side cover.");
+            Require(health.currentHealth == before && tracer.GetPosition(1).z < 1.3f, "Hip/shoulder shot passed through muzzle-side cover.");
             UnityEngine.Object.Destroy(wall); yield return null;
 
-            // A ray starting inside a collider ordinarily misses that collider.
+            // A clipped physical muzzle must not fire through its containing wall.
             wall = Wall(muzzle.transform.position, Vector3.one * 0.3f);
             before = health.currentHealth; Fire(shooter, runtime, data);
             Require(health.currentHealth == before && Vector3.Distance(tracer.GetPosition(0), tracer.GetPosition(1)) < 0.001f, "Clipped muzzle fired through containing wall.");
@@ -131,12 +131,12 @@ public static class MuzzleShotPlayChecks
             foreach (Collider retained in (Collider[])Get(shooter, "muzzleOverlapBuffer"))
                 Require(ReferenceEquals(retained, null), "Overlap buffer retained collider references.");
 
-            // Obstruction behind the gun must not cause bullets to fly backward.
+            // An obstruction behind the gun must not redirect a muzzle-origin shot backward.
             wall = Wall(new Vector3(0,1.5f,-1), new Vector3(1,0.8f,0.3f));
             before = health.currentHealth; Fire(shooter, runtime, data);
-            Require(Mathf.Abs(health.currentHealth - (before - damage)) < 0.01f, "Camera obstruction behind muzzle redirected shot backward.");
+            Require(Mathf.Abs(health.currentHealth - (before - damage)) < 0.01f, "Camera obstruction behind muzzle redirected hip/shoulder shot backward.");
             UnityEngine.Object.Destroy(wall); yield return null;
-            Debug.Log("[MuzzleShot] PASS slot " + (i + 2) + ": center-target convergence, physical/tracer origin, one-round consumption, muzzle-side cover, clipped muzzle, and rear camera obstruction.");
+            Debug.Log("[MuzzleShot] PASS slot " + (i + 2) + ": hip/shoulder muzzle origin, convergence, cover, clipping, and one-round consumption.");
         }
         loadout.TrySelectSlot(2);
         target.transform.position = new Vector3(0,1.5f,2);
@@ -150,10 +150,31 @@ public static class MuzzleShotPlayChecks
         Require(Vector3.Distance(lineNow.GetPosition(0), muzzle.transform.position) < 0.001f, "Rotated muzzle tracer is stale.");
         target.SetActive(false); Physics.SyncTransforms(); Fire(shooter, runtimes[0], rifle);
         Require(Mathf.Abs(Vector3.Distance(lineNow.GetPosition(0), lineNow.GetPosition(1)) - rifle.range) < 0.01f, "Empty-space shot range must be measured from muzzle.");
-        Debug.Log("[MuzzleShot] PASS: near targets, moved/rotated muzzle, and weapon range measured from muzzle.");
+        Debug.Log("[MuzzleShot] PASS: hip/shoulder shots use the moved/rotated muzzle and muzzle-based weapon range.");
+
+        var cameraController = camera.gameObject.AddComponent<ThirdPersonCamera>();
+        FieldInfo aimStateField = typeof(ThirdPersonCamera).GetField("aimState", Private);
+        aimStateField.SetValue(cameraController, Enum.Parse(aimStateField.FieldType, "Scope"));
+        Vector3 cameraCenterOrigin = camera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f)).origin;
+        target.SetActive(true); Physics.SyncTransforms();
+        previous = health.currentHealth; Fire(shooter, runtimes[0], rifle);
+        Require(Mathf.Abs(health.currentHealth - (previous - rifle.damage)) < 0.01f, "Scoped camera-center shot missed centered target.");
+        Require(Vector3.Distance(lineNow.GetPosition(0), cameraCenterOrigin) < 0.001f, "Scoped tracer did not start at camera center.");
+
+        var scopedWall = Wall(muzzle.transform.position, Vector3.one * 0.3f);
+        previous = health.currentHealth; Fire(shooter, runtimes[0], rifle);
+        Require(Mathf.Abs(health.currentHealth - (previous - rifle.damage)) < 0.01f, "Visual muzzle clipping blocked scoped camera-center shot.");
+        UnityEngine.Object.Destroy(scopedWall); yield return null;
+
+        scopedWall = Wall(new Vector3(0,1.5f,-1), new Vector3(1,0.8f,0.3f));
+        previous = health.currentHealth; Fire(shooter, runtimes[0], rifle);
+        Require(Mathf.Abs(health.currentHealth - previous) < 0.01f && lineNow.GetPosition(1).z < -0.8f, "Camera-side obstruction did not block scoped shot.");
+        UnityEngine.Object.Destroy(scopedWall); yield return null;
+        Debug.Log("[MuzzleShot] PASS: scoped shots originate at camera center and ignore visual muzzle position.");
+
         UnityEngine.Object.Destroy(root); UnityEngine.Object.Destroy(target); UnityEngine.Object.Destroy(camera.gameObject);
         foreach (var data in weapons) UnityEngine.Object.Destroy(data);
-        Debug.Log("[MuzzleShot] COMPLETE: all muzzle-origin gameplay checks passed.");
+        Debug.Log("[MuzzleShot] COMPLETE: all hybrid muzzle/scope gameplay checks passed.");
     }
 }
 public class MuzzleShotPlayRunner : MonoBehaviour

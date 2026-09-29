@@ -44,12 +44,16 @@ public static class DifficultyBalancePlayChecks
         var enemy = enemyRoot.AddComponent<EnemyAI>();
         var combat = enemyRoot.GetComponent<EnemyCombat>();
         if (combat == null) combat = enemyRoot.AddComponent<EnemyCombat>();
+        var perception = enemyRoot.GetComponent<EnemyPerception>();
+        int[] expectedTotals = { 0, 3, 5, 6, 8, 9, 11, 12, 14 };
+        int[] expectedMeleeCounts = { 0, 3, 3, 3, 6, 7, 3, 3, 4 };
         foreach (int round in new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 30, 6, 1 })
         {
             Set(stage, "currentStage", round);
             int total = stage.EnemyCountForStage(round), melee = stage.MeleeCountForStage(round, total);
-            Require(total == (round == 1 ? 3 : round == 2 ? 5 : 7), "Enemy count progression incorrect");
-            Require(melee == (round == 1 ? 3 : round == 2 ? 3 : round >= 4 && round < 6 ? 5 : round >= 6 ? 2 : 4), "Wrong composition at round " + round);
+            int cappedRound = Mathf.Clamp(round, 1, 8);
+            Require(total == expectedTotals[cappedRound], "Enemy count progression incorrect");
+            Require(melee == expectedMeleeCounts[cappedRound], "Wrong composition at round " + round);
             foreach (EnemyType type in new[] { EnemyType.Melee, EnemyType.Ranged })
             {
                 Require(Invoke(stage, "PickEnemyPrefabObject", type) == (type == EnemyType.Melee ? meleePrefab : rangedPrefab), "Typed prefab choice failed");
@@ -59,9 +63,10 @@ public static class DifficultyBalancePlayChecks
                 Near(combat.meleeDamage, boostedMelee ? 15 : 10, "Melee damage/reset");
                 Near(combat.rangedDamage, round >= 6 ? 18 : 12, "Ranged damage/reset");
                 Near(combat.rangedAttackRate, round >= 6 ? .9f : .6f, "Ranged fire rate/reset");
+                Near(perception.horizontalViewAngleTotal, type == EnemyType.Melee ? 240f : 30f, "Enemy horizontal vision angle");
             }
         }
-        Debug.Log("[Balance] PASS: rounds 1-9/30, counts, typed prefabs, majorities, boosts and 6/1 stat resets.");
+        Debug.Log("[Balance] PASS: rounds 1-8 gradual count growth and cap, typed prefabs, majorities, boosts and 6/1 stat resets.");
         UnityEngine.Object.Destroy(enemyRoot);
 
         var rifle = AssetDatabase.LoadAssetAtPath<WeaponData>("Assets/WeaponData.asset");

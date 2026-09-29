@@ -19,7 +19,9 @@ public class PlayerHealth : MonoBehaviour, IDamageable
     public float CurrentHealth { get; private set; }
     public float MaxHealth => maxHealth;
     public bool IsDead { get; private set; }
+    public bool IsInvulnerable => Time.time < invulnerableUntil || (dodge != null && dodge.IsInvulnerable);
     private PlayerDodge dodge;
+    private float invulnerableUntil = -1f;
 
     private void Awake()
     {
@@ -35,7 +37,7 @@ public class PlayerHealth : MonoBehaviour, IDamageable
         if (IsDead) return;
         if (amount <= 0f) return;
         if (dodge == null) dodge = GetComponent<PlayerDodge>();
-        if (dodge != null && dodge.IsInvulnerable) return;
+        if (IsInvulnerable) return;
 
         CurrentHealth = Mathf.Max(0f, CurrentHealth - amount);
         Damaged?.Invoke(amount);
@@ -86,5 +88,11 @@ public class PlayerHealth : MonoBehaviour, IDamageable
         if (IsDead || amount <= 0f) return;
         maxHealth += amount;
         Heal(amount);
+    }
+
+    public void GrantInvulnerability(float duration)
+    {
+        if (IsDead || duration <= 0f) return;
+        invulnerableUntil = Mathf.Max(invulnerableUntil, Time.time + duration);
     }
 }

@@ -507,6 +507,7 @@ public static class ColonialGraveyardSceneSetup
         serializedManager.FindProperty("navMeshSampleRadius").floatValue = Mathf.Clamp(largestHorizontalExtent * 0.08f, 5f, 18f);
         serializedManager.FindProperty("spawnAttemptsPerEnemy").intValue = 100;
         serializedManager.FindProperty("mapWideDetectDistance").floatValue = Mathf.Max(1200f, largestHorizontalExtent * 4f);
+        serializedManager.FindProperty("meleeHorizontalVisionAngle").floatValue = 240f;
         serializedManager.FindProperty("rangedVisionDistance").floatValue = Mathf.Max(2400f, largestHorizontalExtent * 8f);
         serializedManager.FindProperty("rangedHorizontalVisionAngle").floatValue = 30f;
         serializedManager.FindProperty("rangedVerticalVisionUp").floatValue = 70f;

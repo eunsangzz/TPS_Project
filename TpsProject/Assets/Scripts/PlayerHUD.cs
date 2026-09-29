@@ -21,6 +21,10 @@ public class PlayerHUD : MonoBehaviour
     [SerializeField] private int pointsPerKill = 100;
 
     private float lastHp = -1f;
+    private float lastMaxHp = -1f;
+    private Canvas healthCanvas;
+    private RectTransform healthSafeArea;
+    private Image healthFill;
     private int lastMag = -1;
     private int lastRes = -1;
     private int score;
@@ -37,6 +41,7 @@ public class PlayerHUD : MonoBehaviour
     {
         ResolveReferences();
 
+        BuildHealthUI();
         InitHealthUI();
         TrackEnemies();
         ForceRefresh();
@@ -44,6 +49,7 @@ public class PlayerHUD : MonoBehaviour
 
     private void OnDestroy()
     {
+        CombatHUDStyle.DestroyCanvas(healthCanvas);
         if (subscribedHealth != null) subscribedHealth.Died -= HandlePlayerDied;
         foreach (EnemyHealth enemy in trackedEnemies)
         {
@@ -156,10 +162,47 @@ public class PlayerHUD : MonoBehaviour
         healthSlider.value = playerHealth.CurrentHealth;
     }
 
+    private void BuildHealthUI()
+    {
+        if (healthSlider != null) healthSlider.gameObject.SetActive(false);
+        if (healthText != null) healthText.gameObject.SetActive(false);
+        healthCanvas = CombatHUDStyle.CreateCanvas("PlayerHealthCanvas", out healthSafeArea);
+        RectTransform panel = CombatHUDStyle.Image("HealthPanel", healthSafeArea, Vector2.zero,
+            new Vector2(32f, 32f), new Vector2(320f, 90f), CombatHUDStyle.Panel).rectTransform;
+        panel.pivot = Vector2.zero;
+        CombatHUDStyle.Image("Accent", panel, new Vector2(0f, 0.5f), new Vector2(2f, 0f),
+            new Vector2(4f, 90f), CombatHUDStyle.Accent);
+        healthText = CombatHUDStyle.Text("HealthValue", panel, new Vector2(0f, 15f), new Vector2(280f, 36f), 25f);
+        healthText.alignment = TextAlignmentOptions.Left;
+        Image track = CombatHUDStyle.Image("HealthBar", panel, new Vector2(0.5f, 0.5f), new Vector2(0f, -21f),
+            new Vector2(280f, 10f), new Color(0.2f, 0.26f, 0.29f));
+        healthFill = CombatHUDStyle.Image("Fill", track.transform, new Vector2(0.5f, 0.5f),
+            Vector2.zero, Vector2.zero, CombatHUDStyle.Accent);
+        healthFill.rectTransform.anchorMin = Vector2.zero;
+        healthFill.rectTransform.anchorMax = Vector2.one;
+        healthFill.rectTransform.offsetMin = healthFill.rectTransform.offsetMax = Vector2.zero;
+        healthSlider = track.gameObject.AddComponent<Slider>();
+        healthSlider.fillRect = healthFill.rectTransform;
+        healthSlider.interactable = false;
+        healthSlider.transition = Selectable.Transition.None;
+        healthSlider.navigation = new Navigation { mode = Navigation.Mode.None };
+    }
+
+    private void OnDisable()
+    {
+        if (healthCanvas != null) healthCanvas.enabled = false;
+    }
+
     private void LateUpdate()
     {
         if (playerHealth == null || shooter == null)
             ResolveReferences();
+
+        if (healthCanvas != null)
+        {
+            healthCanvas.enabled = isActiveAndEnabled && playerHealth != null && !playerHealth.IsDead && Time.timeScale > 0f;
+            CombatHUDStyle.ApplySafeArea(healthSafeArea);
+        }
 
         bool centralWeaponBar = shooter != null && shooter.GetComponent<PlayerWeaponBarUI>() != null;
         if (ammoText != null) ammoText.gameObject.SetActive(!centralWeaponBar);
@@ -172,7 +215,8 @@ public class PlayerHUD : MonoBehaviour
             nextEnemyScanTime = Time.time + 0.5f;
         }
 
-        bool hpchanged = playerHealth != null && !Mathf.Approximately(lastHp, playerHealth.CurrentHealth);
+        bool hpchanged = playerHealth != null && (!Mathf.Approximately(lastHp, playerHealth.CurrentHealth) ||
+            !Mathf.Approximately(lastMaxHp, playerHealth.MaxHealth));
         bool ammoChanged = shooter != null && ((lastMag != shooter.AmmoInMag) || (lastRes != shooter.ReserveAmmo));
         bool reloadChanged = shooter != null && (lastReload != shooter.IsReloading);
         bool modeChanged = shooter != null && (lastMode != shooter.CurrentFireMode);
@@ -183,7 +227,10 @@ public class PlayerHUD : MonoBehaviour
         UpdateScore();
 
         if (playerHealth != null)
+        {
             lastHp = playerHealth.CurrentHealth;
+            lastMaxHp = playerHealth.MaxHealth;
+        }
 
         if (shooter != null)
         {
@@ -217,8 +264,10 @@ public class PlayerHUD : MonoBehaviour
 
         if(healthText != null)
         {
-            healthText.text = $"{Mathf.CeilToInt(playerHealth.CurrentHealth)} / {Mathf.CeilToInt(playerHealth.MaxHealth)}";
+            healthText.text = $"체력 {Mathf.CeilToInt(playerHealth.CurrentHealth)} / {Mathf.CeilToInt(playerHealth.MaxHealth)}";
         }
+        if (healthFill != null)
+            healthFill.color = playerHealth.CurrentHealth <= playerHealth.MaxHealth * 0.25f ? CombatHUDStyle.Danger : CombatHUDStyle.Accent;
     }
 
     private void UpdateAmmo()
@@ -232,7 +281,7 @@ public class PlayerHUD : MonoBehaviour
         }
 
         if (reloadText != null)
-            reloadText.gameObject.SetActive(shooter.IsReloading && shooter.GetComponent<PlayerWeaponBarUI>() == null);
+            reloadText.gameObject.SetActive(false);
     }
 
     private void UpdateMode()

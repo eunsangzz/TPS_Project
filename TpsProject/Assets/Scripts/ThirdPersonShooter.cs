@@ -45,6 +45,15 @@ public class ThirdPersonShooter : MonoBehaviour
     [SerializeField] private WeaponRuntime shotgunRuntime = new WeaponRuntime();
     [SerializeField] private WeaponRuntime sniperRuntime = new WeaponRuntime();
     private Coroutine reloadRoutine;
+    private float reloadStartedAt, reloadDuration;
+    private CombatFeedbackUI feedback;
+    private struct ShotDamage
+    {
+        public float Amount;
+        public Vector3 Point;
+    }
+    private readonly System.Collections.Generic.Dictionary<EnemyHealth, ShotDamage> shotDamage =
+        new System.Collections.Generic.Dictionary<EnemyHealth, ShotDamage>();
     private PlayerLoadout loadout;
     private PlayerSkills skills;
     private int stageAmmoCapacity;
@@ -70,6 +79,8 @@ public class ThirdPersonShooter : MonoBehaviour
     public int ReserveAmmo => ActiveRuntime.ReserveAmmo;
     public bool InfiniteReserveAmmo => ActiveRuntime.InfiniteReserveAmmo;
     public bool IsReloading => ActiveRuntime.IsReloading;
+    public float ReloadRemaining => IsReloading ? Mathf.Max(0f, reloadDuration - (Time.time - reloadStartedAt)) : 0f;
+    public float ReloadProgress => IsReloading ? (reloadDuration > 0f ? Mathf.Clamp01((Time.time - reloadStartedAt) / reloadDuration) : 1f) : 0f;
     public WeaponData.FireMode CurrentFireMode => ActiveRuntime.CurrentFireMode;
     public bool IsGunEquipped => loadout == null || loadout.IsGunEquipped;
     public Camera ShooterCamera => shooterCamera;
@@ -81,6 +92,7 @@ public class ThirdPersonShooter : MonoBehaviour
         if (weaponVFX == null) weaponVFX = GetComponentInChildren<WeaponVFX>();
         if (shooterCamera == null) if (Camera.main != null) shooterCamera = Camera.main;
         if (playerHealth == null) playerHealth = GetComponent<PlayerHealth>();
+        if (playerHealth != null) playerHealth.Died += CancelReload;
 
         if (weaponData == null)
         {
@@ -109,6 +121,9 @@ public class ThirdPersonShooter : MonoBehaviour
         PlayerCrosshairUI crosshair = GetComponent<PlayerCrosshairUI>();
         if (crosshair == null) crosshair = gameObject.AddComponent<PlayerCrosshairUI>();
         crosshair.Initialize(this, shooterCamera, playerHealth);
+        feedback = GetComponent<CombatFeedbackUI>();
+        if (feedback == null) feedback = gameObject.AddComponent<CombatFeedbackUI>();
+        feedback.Initialize(this, playerHealth);
         loadout = GetComponent<PlayerLoadout>();
         if (loadout == null) loadout = gameObject.AddComponent<PlayerLoadout>();
         loadout.Initialize(this);
@@ -185,6 +200,7 @@ public class ThirdPersonShooter : MonoBehaviour
         activeRuntime.ConsumeAmmo();
         WeaponData.Stats stats = StatsFor(activeData);
         shotDamagedEnemy = false;
+        shotDamage.Clear();
         if (activeData.fireClip != null && fireAudioSource != null)
             fireAudioSource.PlayOneShot(activeData.fireClip, fireVolume);
         ShotFired?.Invoke(this, transform.position);
@@ -199,12 +215,12 @@ public class ThirdPersonShooter : MonoBehaviour
             stats.HipSpread;
 
         int pelletCount = stats.PelletCount;
-        Vector3 origin = weaponVFX != null ? weaponVFX.MuzzlePosition :
-            transform.position + Vector3.up * 1.2f + transform.forward * 0.5f;
-        Vector3 aimPoint = FindAimPoint(origin, activeData);
+        Ray cameraCenterRay = shooterCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+        Vector3 origin = isScoped || weaponVFX == null ? cameraCenterRay.origin : weaponVFX.MuzzlePosition;
+        Vector3 aimPoint = isScoped ? cameraCenterRay.GetPoint(activeData.range) : FindAimPoint(origin, activeData);
         Vector3 aimDirection = (aimPoint - origin).normalized;
-        if (aimDirection.sqrMagnitude < 0.0001f) aimDirection = shooterCamera.transform.forward;
-        bool muzzleBlocked = IsMuzzleInsideObstacle(origin, activeData);
+        if (aimDirection.sqrMagnitude < 0.0001f) aimDirection = cameraCenterRay.direction;
+        bool muzzleBlocked = !isScoped && IsMuzzleInsideObstacle(origin, activeData);
         var hitPoints = new System.Collections.Generic.List<Vector3>(pelletCount);
         for (int i = 0; i < pelletCount; i++)
         {
@@ -213,6 +229,8 @@ public class ThirdPersonShooter : MonoBehaviour
             hitPoints.Add(muzzleBlocked ? origin : TraceShot(ray, activeData));
         }
         if (shotDamagedEnemy) skills?.OnAttackHit();
+        foreach (ShotDamage damage in shotDamage.Values) feedback?.ShowDamage(damage.Amount, damage.Point);
+        shotDamage.Clear();
 
         if (weaponVFX != null)
         {
@@ -247,6 +265,8 @@ public class ThirdPersonShooter : MonoBehaviour
 
     private IEnumerator ReloadRoutine(WeaponRuntime reloadingRuntime, WeaponData reloadingData)
     {
+        reloadStartedAt = Time.time;
+        reloadDuration = Mathf.Max(0f, StatsFor(reloadingData).ReloadTime);
         reloadingRuntime.StartReload();
         PushAnimatorState();
 
@@ -260,19 +280,21 @@ public class ThirdPersonShooter : MonoBehaviour
         if (animator != null && !string.IsNullOrEmpty(reloadTrigger))
             animator.SetTrigger(reloadTrigger);
 
-        yield return new WaitForSeconds(StatsFor(reloadingData).ReloadTime);
+        yield return new WaitForSeconds(reloadDuration);
 
         reloadingRuntime.FinishReload(StatsFor(reloadingData).MagazineSize);
         StopReloadAudio();
         reloadRoutine = null;
+        reloadDuration = 0f;
         PushAnimatorState();
     }
+
+    private bool IsOwnCollider(Collider collider) => collider == null ||
+        collider.transform == transform || collider.transform.IsChildOf(transform);
 
     private Vector3 FindAimPoint(Vector3 muzzlePosition, WeaponData data)
     {
         Ray viewRay = shooterCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-        // The camera sits behind the player. Ignore targets behind the muzzle plane
-        // so a nearby camera obstruction cannot turn the shot back toward the player.
         float muzzleDepth = Mathf.Max(0f, Vector3.Dot(muzzlePosition - viewRay.origin, viewRay.direction));
         float closestDistance = muzzleDepth + data.range;
         Vector3 aimPoint = viewRay.GetPoint(closestDistance);
@@ -289,8 +311,6 @@ public class ThirdPersonShooter : MonoBehaviour
 
     private bool IsMuzzleInsideObstacle(Vector3 origin, WeaponData data)
     {
-        // Raycasts miss surfaces when starting inside them. A tiny overlap probe
-        // prevents a muzzle clipped into a wall from firing through that wall.
         int count;
         while (true)
         {
@@ -309,9 +329,6 @@ public class ThirdPersonShooter : MonoBehaviour
         return blocked;
     }
 
-    private bool IsOwnCollider(Collider collider) => collider == null ||
-        collider.transform == transform || collider.transform.IsChildOf(transform);
-
     private Vector3 TraceShot(Ray ray, WeaponData data)
     {
         Vector3 end = ray.GetPoint(data.range);
@@ -326,8 +343,16 @@ public class ThirdPersonShooter : MonoBehaviour
             if (enemy != null && (enemy.IsDead || !targets.Add(enemy))) continue;
             float multiplier = targets.Count > 1 ? 0.5f : 1f;
             float healthBefore = enemy != null ? enemy.currentHealth : 0f;
-            hit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(StatsFor(data).Damage * multiplier, hit.point, ray.direction);
-            if (enemy != null && enemy.currentHealth < healthBefore) shotDamagedEnemy = true;
+            float amount = StatsFor(data).Damage * multiplier;
+            hit.collider.GetComponentInParent<IDamageable>()?.TakeDamage(amount, hit.point, ray.direction);
+            if (enemy != null && enemy.currentHealth < healthBefore)
+            {
+                shotDamagedEnemy = true;
+                shotDamage.TryGetValue(enemy, out ShotDamage damage);
+                damage.Point = damage.Amount > 0f ? (damage.Point * damage.Amount + hit.point * amount) / (damage.Amount + amount) : hit.point;
+                damage.Amount += amount;
+                shotDamage[enemy] = damage;
+            }
             if (weaponVFX != null)
             {
                 weaponVFX.PlayHitEffect(hit);
@@ -341,6 +366,7 @@ public class ThirdPersonShooter : MonoBehaviour
 
     public void CancelReload()
     {
+        reloadDuration = 0f;
         StopReloadAudio();
         if (reloadRoutine != null) StopCoroutine(reloadRoutine);
         reloadRoutine = null;
@@ -401,6 +427,7 @@ public class ThirdPersonShooter : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (playerHealth != null) playerHealth.Died -= CancelReload;
         if (weaponAudioRoot != null) Destroy(weaponAudioRoot);
         if (ownsShotgunData && shotgunData != null) Destroy(shotgunData);
     }

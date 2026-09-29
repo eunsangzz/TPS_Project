@@ -85,7 +85,7 @@ public class PlayerWeaponBarUI : MonoBehaviour
         }
         string ammoLabel = loadout.IsGunEquipped ? $"{shooter.AmmoInMag} / {shooter.ReserveAmmo}" : "MELEE";
         string statusLabel = loadout.IsMeleeEquipped ? (loadout.Melee.CooldownRemaining > 0f ? "RECOVERING" : "READY") :
-            shooter.IsReloading ? "RELOADING" : shooter.AmmoInMag + shooter.ReserveAmmo == 0 ? "EMPTY" :
+            shooter.IsReloading ? "" : shooter.AmmoInMag + shooter.ReserveAmmo == 0 ? "EMPTY" :
             loadout.IsShotgunEquipped ? "SHOTGUN / 4 PELLETS" :
             loadout.IsSniperEquipped ? "SNIPER / SINGLE / 6X" :
             shooter.CurrentFireMode == WeaponData.FireMode.Auto ? "AUTO" : "SINGLE";

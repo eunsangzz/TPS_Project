@@ -11,11 +11,11 @@ public class EnemyCombat : MonoBehaviour
     public EnemyType enemyType = EnemyType.Melee;
 
     [Header("Melee")]
-    public float meleeRange = 1.2f;
+    public float meleeRange = EnemyAI.DefaultMeleeAttackRange;
     public float meleeDamage = 10f;
     public float meleeAttackRate = 1.5f;
-    [Min(0f)] public float meleeWindup = 0.35f;
-    [Min(0f)] public float meleeHitRangeGrace = 0.25f;
+    [Min(0f)] public float meleeWindup = EnemyAI.DefaultMeleeWindup;
+    [Min(0f)] public float meleeHitRangeGrace = EnemyAI.DefaultMeleeHitRangeGrace;
 
     [Header("Ranged")]
     public float rangedRange = 18f;

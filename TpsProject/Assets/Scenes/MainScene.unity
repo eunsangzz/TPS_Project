@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 1
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SkyboxMaterial: {fileID: 2100000, guid: a45391e8b7ac43bcad42fd075f012684, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -24328,7 +24328,9 @@ MonoBehaviour:
   - {fileID: 1475454147}
   firstStageEnemyCount: 3
   enemiesAddedPerStage: 2
+  enemyCountGrowthEndStage: 8
   nextStageDelay: 3
+  stageStartInvulnerabilityDuration: 3
   startOnAwake: 1
   useEntireNavMesh: 1
   spawnBoundsCenter: {x: 3.380313, y: 1.9606645, z: -12.461412}
@@ -24339,11 +24341,14 @@ MonoBehaviour:
   navMeshSampleRadius: 5
   spawnAttemptsPerEnemy: 100
   mapWideDetectDistance: 1200
+  meleeHorizontalVisionAngle: 240
   rangedVisionDistance: 2400
   rangedHorizontalVisionAngle: 30
   rangedVerticalVisionUp: 70
   rangedVerticalVisionDown: 70
   ignoreLineOfSight: 0
+  enemyFootstepClip: {fileID: 8300000, guid: f13d580c9a7edc442a3c22f0caea5356, type: 3}
+  enemyFootstepVolume: 0.35
 --- !u!4 &2138029539
 Transform:
   m_ObjectHideFlags: 0

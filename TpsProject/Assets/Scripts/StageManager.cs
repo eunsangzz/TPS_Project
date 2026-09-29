@@ -17,8 +17,10 @@ public class StageManager : MonoBehaviour
 
     [Header("Stage")]
     [SerializeField] private int firstStageEnemyCount = 3;
-    [SerializeField] private int enemiesAddedPerStage = 2;
+    [SerializeField, Range(1, 2)] private int enemiesAddedPerStage = 2;
+    [SerializeField, Min(1)] private int enemyCountGrowthEndStage = 8;
     [SerializeField] private float nextStageDelay = 3f;
+    [SerializeField, Min(0f)] private float stageStartInvulnerabilityDuration = 3f;
     [SerializeField] private bool startOnAwake = true;
 
     [Header("Stage Difficulty")]
@@ -43,11 +45,16 @@ public class StageManager : MonoBehaviour
 
     [Header("Enemy Senses")]
     [SerializeField] private float mapWideDetectDistance = 1200f;
+    [SerializeField, Range(10f, 360f)] private float meleeHorizontalVisionAngle = 240f;
     [SerializeField] private float rangedVisionDistance = 2400f;
     [SerializeField] private float rangedHorizontalVisionAngle = 30f;
     [SerializeField] private float rangedVerticalVisionUp = 70f;
     [SerializeField] private float rangedVerticalVisionDown = 70f;
     [SerializeField] private bool ignoreLineOfSight = false;
+
+    [Header("Enemy Footsteps")]
+    [SerializeField] private AudioClip enemyFootstepClip;
+    [SerializeField, Range(0f, 1f)] private float enemyFootstepVolume = 0.35f;
 
     private readonly List<EnemyHealth> aliveEnemies = new List<EnemyHealth>();
     private int currentStage;
@@ -98,6 +105,8 @@ public class StageManager : MonoBehaviour
         if (shooter != null) shooter.ResetAmmoForStage();
         PlayerMelee melee = player != null ? player.GetComponent<PlayerMelee>() : null;
         if (melee != null) melee.CancelAttack();
+        PlayerHealth playerHealth = player != null ? player.GetComponent<PlayerHealth>() : null;
+        if (playerHealth != null) playerHealth.GrantInvulnerability(stageStartInvulnerabilityDuration);
 
         int enemyCount = EnemyCountForStage(currentStage);
         SpawnStage(enemyCount);
@@ -145,8 +154,18 @@ public class StageManager : MonoBehaviour
     }
 
     // Fixed quotas prevent random rolls from reversing the intended majority.
-    public int EnemyCountForStage(int stage) => Mathf.Max(1,
-        firstStageEnemyCount + (Mathf.Clamp(stage, 1, 3) - 1) * enemiesAddedPerStage);
+    public int EnemyCountForStage(int stage)
+    {
+        int cappedStage = Mathf.Clamp(stage, 1, enemyCountGrowthEndStage);
+        int completedStages = cappedStage - 1;
+        int maxIncrease = Mathf.Clamp(enemiesAddedPerStage, 1, 2);
+        int addedEnemies = completedStages;
+
+        // With a maximum increase of two, alternate +2 and +1 to keep growth gradual.
+        if (maxIncrease == 2) addedEnemies += (completedStages + 1) / 2;
+
+        return Mathf.Max(1, firstStageEnemyCount + addedEnemies);
+    }
 
     public int MeleeCountForStage(int stage, int total)
     {
@@ -220,7 +239,9 @@ public class StageManager : MonoBehaviour
         capsule.direction = 1;
 
         EnemyHealth health = EnsureComponent<EnemyHealth>(enemyObject);
-        health.maxHealth = 100f;
+        float startingHealth = EnemyHealth.GetStartingHealth(enemyType);
+        health.maxHealth = startingHealth;
+        health.currentHealth = startingHealth;
 
         EnemyAI enemy = EnsureComponent<EnemyAI>(enemyObject);
         enemy.enemyType = enemyType;
@@ -246,6 +267,7 @@ public class StageManager : MonoBehaviour
 
         Animator animator = enemyObject.GetComponent<Animator>();
         if (animator != null) animator.applyRootMotion = false;
+        enemy.ConfigureFootsteps(enemyFootstepClip, enemyFootstepVolume);
 
         return enemy;
     }
@@ -304,8 +326,8 @@ public class StageManager : MonoBehaviour
             {
                 perception.viewDistance = mapWideDetectDistance;
                 perception.rangedDetectDistance = mapWideDetectDistance;
-                perception.viewAngleTotal = 360f;
-                perception.horizontalViewAngleTotal = 360f;
+                perception.viewAngleTotal = meleeHorizontalVisionAngle;
+                perception.horizontalViewAngleTotal = meleeHorizontalVisionAngle;
                 perception.useLineOfSight = !ignoreLineOfSight;
             }
         }

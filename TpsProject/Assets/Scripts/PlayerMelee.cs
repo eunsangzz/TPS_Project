@@ -24,6 +24,7 @@ public class PlayerMelee : MonoBehaviour
     private bool animationDriven;
     private Quaternion gripRotation;
     private PlayerSkills skills;
+    private CombatFeedbackUI feedback;
     private readonly HashSet<EnemyHealth> hitEnemies = new HashSet<EnemyHealth>();
     private int attackSequence;
 
@@ -37,6 +38,7 @@ public class PlayerMelee : MonoBehaviour
     {
         loadout = owner;
         skills = GetComponent<PlayerSkills>();
+        feedback = GetComponent<CombatFeedbackUI>();
         view = camera;
         Animator animator = GetComponentInChildren<Animator>();
         if (animator != null)
@@ -104,8 +106,13 @@ public class PlayerMelee : MonoBehaviour
             if (IsBlocked(origin, point, enemy)) continue;
             hitEnemies.Add(enemy);
             float healthBefore = enemy.currentHealth;
-            enemy.TakeDamage(damage * (skills != null ? skills.MeleeDamageMultiplier : 1f), point, attackDirection);
-            if (enemy.currentHealth < healthBefore) damagedEnemy = true;
+            float amount = damage * (skills != null ? skills.MeleeDamageMultiplier : 1f);
+            enemy.TakeDamage(amount, point, attackDirection);
+            if (enemy.currentHealth < healthBefore)
+            {
+                damagedEnemy = true;
+                feedback?.ShowDamage(amount, point);
+            }
             if (enemy.IsDead && skills != null) skills.OnMeleeKill();
         }
         if (damagedEnemy) skills?.OnAttackHit();

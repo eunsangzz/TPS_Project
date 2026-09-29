@@ -12,6 +12,10 @@ public class EnemyAI : MonoBehaviour
 {
     public const float MeleeSpeedMultiplier = 1.5f;
     public const float DefaultMeleeMoveSpeed = 5.4f;
+    public const float DefaultMeleeAttackAnimationSpeed = 1.45f;
+    public const float DefaultMeleeAttackRange = 1.4f;
+    public const float DefaultMeleeWindup = 0.24f;
+    public const float DefaultMeleeHitRangeGrace = 0.75f;
     public const string MeleeWeaponName = "EnemyMeleeBlade";
     private const string MeleeAnimationLayerName = "PlayerMelee";
     private const string MeleeAttackStateName = "Attack";
@@ -97,6 +101,14 @@ public class EnemyAI : MonoBehaviour
     [SerializeField] private string attackTrigger = "FireSingle";
     [SerializeField] private string movementSpeedMultiplierParam = "MovementSpeedMultiplier";
     [SerializeField] private float animatorSpeedDampTime = 0.12f;
+    [SerializeField, Min(1f)] private float meleeAttackAnimationSpeed = DefaultMeleeAttackAnimationSpeed;
+
+    [Header("Footsteps")]
+    [SerializeField] private AudioClip footstepClip;
+    [SerializeField, Range(0f, 1f)] private float footstepVolume = 0.35f;
+    [SerializeField, Min(0f)] private float footstepMovingThreshold = 0.15f;
+    [SerializeField, Range(0f, 0.5f)] private float firstFootContactPhase = 0.1f;
+    [SerializeField] private Vector2 footstepPitchRange = new Vector2(0.94f, 1.06f);
 
     [Header("Ranged Evasion")]
     public float rangedEvasionInterval = 0.85f;
@@ -122,6 +134,11 @@ public class EnemyAI : MonoBehaviour
     private Renderer meleeBladeRenderer;
     private MaterialPropertyBlock meleeBladeProperties;
     private DodgeRollAnimation dodgeAnimation;
+    private AudioSource footstepAudioSource;
+    private bool wasMovingForFootsteps;
+    private int lastFootstepStateHash;
+    private int lastFootContactIndex;
+    private float lastFootstepNormalizedTime;
 
     private State state = State.Patrol;
     private CoverPoint currentCover;
@@ -192,6 +209,7 @@ public class EnemyAI : MonoBehaviour
         ThirdPersonShooter.ShotFired -= HandlePlayerGunshot;
         hasHeardGunshot = false;
         if (isDodging) FinishDodge();
+        if (animator != null) animator.speed = 1f;
     }
 
     private void LateUpdate()
@@ -220,7 +238,11 @@ public class EnemyAI : MonoBehaviour
 
     private void Update()
     {
-        if (health != null && health.IsDead) return;
+        if (health != null && health.IsDead)
+        {
+            if (animator != null) animator.speed = 1f;
+            return;
+        }
 
         if (player == null)
         {
@@ -328,6 +350,9 @@ public class EnemyAI : MonoBehaviour
         if (enemyType == EnemyType.Melee)
         {
             agent.speed = meleeMoveSpeed;
+            combat.meleeRange = Mathf.Max(combat.meleeRange, DefaultMeleeAttackRange);
+            combat.meleeWindup = Mathf.Min(combat.meleeWindup, DefaultMeleeWindup);
+            combat.meleeHitRangeGrace = Mathf.Max(combat.meleeHitRangeGrace, DefaultMeleeHitRangeGrace);
         }
         else
         {
@@ -686,19 +711,18 @@ public class EnemyAI : MonoBehaviour
             return;
         }
 
+        float dist = perception.DistanceToPlayer();
+        if (dist <= combat.GetAttackRange())
+        {
+            EnterAttackState();
+            return;
+        }
+
         if (Time.time >= nextRepathTime)
         {
             nextRepathTime = Time.time + repathInterval;
             agent.isStopped = false;
             agent.SetDestination(enemyType == EnemyType.Melee ? GetMeleeSurroundDestination() : player.position);
-        }
-
-        float dist = perception.DistanceToPlayer();
-
-        if (dist <= combat.GetAttackRange())
-        {
-            agent.isStopped = enemyType != EnemyType.Ranged;
-            ChangeState(State.Attack);
         }
     }
 
@@ -708,7 +732,8 @@ public class EnemyAI : MonoBehaviour
 
         float dist = perception.DistanceToPlayer();
 
-        if (dist > combat.GetAttackRange() + 0.5f)
+        bool meleeSwingInProgress = enemyType == EnemyType.Melee && combat.IsAttackPending();
+        if (dist > combat.GetAttackRange() + 0.5f && !meleeSwingInProgress)
         {
             agent.isStopped = false;
             ChangeState(State.Chase);
@@ -734,7 +759,23 @@ public class EnemyAI : MonoBehaviour
             agent.isStopped = true;
         }
 
-        if(combat.CanAttackNow())
+        TryPerformAttack();
+    }
+
+    private void EnterAttackState()
+    {
+        agent.isStopped = enemyType != EnemyType.Ranged;
+        ChangeState(State.Attack);
+        if (enemyType == EnemyType.Melee)
+        {
+            FaceTarget(player.position);
+            TryPerformAttack();
+        }
+    }
+
+    private void TryPerformAttack()
+    {
+        if (combat.CanAttackNow())
         {
             combat.MarkAttackUsed();
             TriggerAttackAnimation();
@@ -745,7 +786,7 @@ public class EnemyAI : MonoBehaviour
     private Vector3 GetMeleeSurroundDestination()
     {
         int slotIndex = 0;
-        int ownId = GetInstanceID();
+        EntityId ownId = GetEntityId();
         for (int i = ActiveEnemies.Count - 1; i >= 0; i--)
         {
             EnemyAI candidate = ActiveEnemies[i];
@@ -756,7 +797,7 @@ public class EnemyAI : MonoBehaviour
             }
             if (candidate == this || candidate.enemyType != EnemyType.Melee || candidate.player != player) continue;
             if (candidate.health != null && candidate.health.IsDead) continue;
-            if (candidate.GetInstanceID() < ownId) slotIndex++;
+            if (candidate.GetEntityId() < ownId) slotIndex++;
         }
 
         Vector3 playerForward = player.forward;
@@ -1150,6 +1191,9 @@ public class EnemyAI : MonoBehaviour
     {
         if (animator == null || agent == null) return;
 
+        animator.speed = enemyType == EnemyType.Melee && state == State.Attack
+            ? Mathf.Max(1f, meleeAttackAnimationSpeed)
+            : 1f;
         float maxSpeed = Mathf.Max(agent.speed, 0.01f);
         float speed01 = agent.isStopped ? 0f : Mathf.Clamp01(agent.velocity.magnitude / maxSpeed);
         bool isMoving = speed01 > 0.05f;
@@ -1160,6 +1204,70 @@ public class EnemyAI : MonoBehaviour
         SetAnimatorBool(isGroundedParam, true);
         SetAnimatorBool(isSprintParam, isMoving && enemyType == EnemyType.Melee);
         SetAnimatorBool(isAimParam, isAiming);
+        UpdateFootsteps(isMoving && agent.velocity.magnitude >= footstepMovingThreshold);
+    }
+
+    public void ConfigureFootsteps(AudioClip clip, float volume)
+    {
+        footstepClip = clip;
+        footstepVolume = Mathf.Clamp01(volume);
+        EnsureFootstepAudioSource();
+    }
+
+    private void UpdateFootsteps(bool isMoving)
+    {
+        if (!isMoving || footstepClip == null)
+        {
+            wasMovingForFootsteps = false;
+            return;
+        }
+
+        AnimatorStateInfo animationState = animator.GetCurrentAnimatorStateInfo(0);
+        float normalizedTime = animationState.normalizedTime;
+        int contactIndex = Mathf.FloorToInt((normalizedTime - firstFootContactPhase) * 2f);
+
+        if (!wasMovingForFootsteps || animationState.fullPathHash != lastFootstepStateHash ||
+            normalizedTime < lastFootstepNormalizedTime)
+        {
+            wasMovingForFootsteps = true;
+            lastFootstepStateHash = animationState.fullPathHash;
+            lastFootContactIndex = contactIndex;
+            lastFootstepNormalizedTime = normalizedTime;
+            return;
+        }
+
+        if (contactIndex > lastFootContactIndex)
+        {
+            PlayFootstep();
+            lastFootContactIndex = contactIndex;
+        }
+
+        lastFootstepNormalizedTime = normalizedTime;
+    }
+
+    private void EnsureFootstepAudioSource()
+    {
+        if (footstepAudioSource != null) return;
+
+        GameObject audioObject = new GameObject("FootstepAudio");
+        audioObject.transform.SetParent(transform, false);
+        footstepAudioSource = audioObject.AddComponent<AudioSource>();
+        footstepAudioSource.playOnAwake = false;
+        footstepAudioSource.loop = false;
+        footstepAudioSource.spatialBlend = 1f;
+        footstepAudioSource.dopplerLevel = 0f;
+        footstepAudioSource.rolloffMode = AudioRolloffMode.Linear;
+        footstepAudioSource.minDistance = 1.5f;
+        footstepAudioSource.maxDistance = 22f;
+    }
+
+    private void PlayFootstep()
+    {
+        EnsureFootstepAudioSource();
+        footstepAudioSource.pitch = Random.Range(
+            Mathf.Min(footstepPitchRange.x, footstepPitchRange.y),
+            Mathf.Max(footstepPitchRange.x, footstepPitchRange.y));
+        footstepAudioSource.PlayOneShot(footstepClip, footstepVolume);
     }
 
     private void TriggerAttackAnimation()
