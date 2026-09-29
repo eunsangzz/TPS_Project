@@ -1,6 +1,0 @@
-E:\Unity\TPS_Project\TpsProject\Temp\bin\Debug\Assembly-CSharp.dll
-E:\Unity\TPS_Project\TpsProject\Temp\bin\Debug\Assembly-CSharp.pdb
-E:\Unity\TPS_Project\TpsProject\obj\Debug\Assembly-CSharp.csproj.AssemblyReference.cache
-E:\Unity\TPS_Project\TpsProject\obj\Debug\Assembly-CSharp.csproj.CoreCompileInputs.cache
-E:\Unity\TPS_Project\TpsProject\obj\Debug\Assembly-CSharp.dll
-E:\Unity\TPS_Project\TpsProject\obj\Debug\Assembly-CSharp.pdb

@@ -1,8 +1,0 @@
-E:\Unity\TPS_Project\TpsProject\obj\Debug\Assembly-CSharp-Editor.csproj.AssemblyReference.cache
-E:\Unity\TPS_Project\TpsProject\obj\Debug\Assembly-CSharp-Editor.csproj.CoreCompileInputs.cache
-E:\Unity\TPS_Project\TpsProject\Temp\bin\Debug\Assembly-CSharp-Editor.dll
-E:\Unity\TPS_Project\TpsProject\Temp\bin\Debug\Assembly-CSharp-Editor.pdb
-E:\Unity\TPS_Project\TpsProject\Temp\bin\Debug\Assembly-CSharp.pdb
-E:\Unity\TPS_Project\TpsProject\obj\Debug\Assembly.1F1299F3.Up2Date
-E:\Unity\TPS_Project\TpsProject\obj\Debug\Assembly-CSharp-Editor.dll
-E:\Unity\TPS_Project\TpsProject\obj\Debug\Assembly-CSharp-Editor.pdb

@@ -2,6 +2,22 @@
 #
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
 #
+# Unity project is nested under TpsProject in this repository.
+/TpsProject/[Ll]ibrary/
+/TpsProject/[Tt]emp/
+/TpsProject/[Oo]bj/
+/TpsProject/[Bb]uild/
+/TpsProject/[Bb]uilds/
+/TpsProject/[Ll]ogs/
+/TpsProject/[Uu]ser[Ss]ettings/
+/TpsProject/[Mm]emoryCaptures/
+/TpsProject/[Rr]ecordings/
+/TpsProject/[Aa]ssets/Plugins/Editor/JetBrains*
+/TpsProject/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+/TpsProject/[Aa]ssets/[Ss]treamingAssets/aa.meta
+/TpsProject/[Aa]ssets/[Ss]treamingAssets/aa/*
+.DS_Store
+
 /[Ll]ibrary/
 /[Tt]emp/
 /[Oo]bj/
